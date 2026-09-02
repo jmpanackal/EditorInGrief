@@ -110,6 +110,9 @@ function handle(ws: WebSocket, msg: ClientMessage) {
     case 'setVoting':
       withPlayer(ws, (code, pid) => store.setVoting(code, pid, msg.enabled));
       break;
+    case 'setRoundSettings':
+      withPlayer(ws, (code, pid) => store.setRoundSettings(code, pid, msg.settings));
+      break;
     case 'startRound':
       withPlayer(ws, (code, pid) => store.startRound(code, pid, msg.sourceId));
       break;

@@ -40,11 +40,26 @@ export interface Round {
   sourceId: string;
   timerSeconds: number;
   startedAt: number; // epoch ms; clients derive their own countdown from this
+  // Round-mode config, snapshotted from the room settings at start (Batch 2):
+  maxRedactions: number | null; // null = unlimited; otherwise cap on shapes/round
+  quickFire: boolean; // true = short fixed timer for fast pacing
   // Runtime-only fields (still safe to persist):
   submissions: Submission[];
   revealIndex: number; // which submission is currently shown at reveal
   votingEnabled: boolean;
   votes: Record<string, string>; // voterPlayerId -> submissionId
+}
+
+/**
+ * Host-configurable settings for the NEXT round(s). Persisted at the room level
+ * (like {@link RoomState.votingEnabled}) and snapshotted onto each {@link Round}
+ * when it starts, so every client sees the config via the full-state snapshot.
+ */
+export interface RoundSettings {
+  /** Max redactions a player may draw per round. null = unlimited (default/off). */
+  maxRedactions: number | null;
+  /** Quick-fire mode: a short fixed timer overriding the word-count formula. */
+  quickFire: boolean;
 }
 
 /** A player in a session. */
@@ -84,6 +99,7 @@ export interface RoomState {
   hostId: string;
   players: Player[];
   votingEnabled: boolean; // room-level setting (off by default)
+  roundSettings: RoundSettings; // host-configured settings for the next round
   roundNumber: number;
   /** The source chosen for the current/most-recent round (denormalized for clients). */
   currentSource: Source | null;
@@ -108,6 +124,7 @@ export type ClientMessage =
   | { type: 'joinRoom'; code: string; nickname: string }
   | { type: 'rejoin'; code: string; playerId: string } // reconnect support
   | { type: 'setVoting'; enabled: boolean } // host only
+  | { type: 'setRoundSettings'; settings: Partial<RoundSettings> } // host only
   | { type: 'startRound'; sourceId?: string } // host only; sourceId optional (else random from bank)
   | { type: 'submit'; roundId: string; editedImageUrl: string }
   | { type: 'advanceReveal'; direction?: 1 | -1 } // host only
@@ -134,5 +151,8 @@ export function computeTimerSeconds(wordCount: number): number {
   const raw = 30 + 0.45 * wordCount;
   return Math.round(Math.min(150, Math.max(45, raw)));
 }
+
+/** Fixed timer (seconds) for quick-fire rounds — overrides the pacing formula. */
+export const QUICKFIRE_SECONDS = 25;
 
 export const WS_PORT = 8787;

@@ -15,9 +15,11 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   computeTimerSeconds,
+  QUICKFIRE_SECONDS,
   type Player,
   type Round,
   type RoomState,
+  type RoundSettings,
   type SeedSource,
   type Source,
   type Submission,
@@ -52,9 +54,28 @@ interface Room {
   sessionId: string;
   usedSourceIds: string[];
   autoTimer?: ReturnType<typeof setTimeout>;
+  /** Per-player timers that let the round progress if a disconnect is not brief. */
+  disconnectTimers: Map<string, ReturnType<typeof setTimeout>>;
+  /** Pending host-transfer timer while a disconnected host is within their grace. */
+  hostGraceTimer?: ReturnType<typeof setTimeout>;
 }
 
 const AUTO_SUBMIT_GRACE_MS = 1800;
+/**
+ * Reconnect/session policy (Batch 3):
+ * - A disconnect never removes a player or their submission; we only flip
+ *   `connected=false` and keep the slot so they can rejoin the same room and
+ *   resume the current phase.
+ * - During an active round we wait PLAYER_DISCONNECT_GRACE_MS before letting the
+ *   round advance without them (so a brief wifi hiccup doesn't skip their turn).
+ * - If the HOST disconnects we keep the room alive and, after
+ *   HOST_GRACE_MS, transfer host to the longest-standing connected player. If the
+ *   original host rejoins within the grace window they stay host.
+ */
+const PLAYER_DISCONNECT_GRACE_MS = 20000;
+const HOST_GRACE_MS = 30000;
+
+const DEFAULT_ROUND_SETTINGS: RoundSettings = { maxRedactions: null, quickFire: false };
 
 export class GameStore {
   private rooms = new Map<string, Room>();
@@ -113,12 +134,18 @@ export class GameStore {
       hostId: playerId,
       players: [host],
       votingEnabled: false,
+      roundSettings: { ...DEFAULT_ROUND_SETTINGS },
       roundNumber: 0,
       currentSource: null,
       currentRound: null,
       serverTime: Date.now(),
     };
-    this.rooms.set(code, { state, sessionId: randomId('sess'), usedSourceIds: [] });
+    this.rooms.set(code, {
+      state,
+      sessionId: randomId('sess'),
+      usedSourceIds: [],
+      disconnectTimers: new Map(),
+    });
     return { code, playerId };
   }
 
@@ -136,6 +163,17 @@ export class GameStore {
     const player = room.state.players.find((p) => p.id === playerId);
     if (!player) throw new GameError('That player is no longer in the room.');
     player.connected = true;
+    // Cancel any pending grace timers now that they're back.
+    const dt = room.disconnectTimers.get(playerId);
+    if (dt) {
+      clearTimeout(dt);
+      room.disconnectTimers.delete(playerId);
+    }
+    // If this player is still the host, their grace window can be cancelled.
+    if (room.state.hostId === playerId && room.hostGraceTimer) {
+      clearTimeout(room.hostGraceTimer);
+      room.hostGraceTimer = undefined;
+    }
     this.broadcast(room.state.code);
     return { code: room.state.code, playerId };
   }
@@ -144,14 +182,66 @@ export class GameStore {
     const room = this.getRoom(code);
     if (!room) return;
     const player = room.state.players.find((p) => p.id === playerId);
-    if (player) player.connected = false;
-    this.maybeAutoReveal(room);
+    if (!player) return;
+    player.connected = false;
+
+    // Host disconnect: keep the room alive; transfer host after a grace window
+    // unless they reconnect first.
+    if (room.state.hostId === playerId) this.scheduleHostTransfer(room);
+
+    // During an active round, don't advance the phase immediately on a drop —
+    // give the player a grace window to reconnect and keep redacting. If they're
+    // still gone when it elapses, let the round proceed without them.
+    if (room.state.phase === 'round') {
+      const existing = room.disconnectTimers.get(playerId);
+      if (existing) clearTimeout(existing);
+      room.disconnectTimers.set(
+        playerId,
+        setTimeout(() => {
+          room.disconnectTimers.delete(playerId);
+          if (room.state.phase === 'round') {
+            this.maybeAutoReveal(room);
+            this.broadcast(room.state.code);
+          }
+        }, PLAYER_DISCONNECT_GRACE_MS),
+      );
+    }
     this.broadcast(room.state.code);
+  }
+
+  private scheduleHostTransfer(room: Room): void {
+    if (room.hostGraceTimer) clearTimeout(room.hostGraceTimer);
+    room.hostGraceTimer = setTimeout(() => {
+      room.hostGraceTimer = undefined;
+      const host = room.state.players.find((p) => p.id === room.state.hostId);
+      if (host && host.connected) return; // reconnected in time
+      // Transfer to the longest-standing connected player (players are in join order).
+      const next = room.state.players.find((p) => p.connected && p.id !== room.state.hostId);
+      if (!next) return; // nobody to hand off to; leave room as-is until someone returns
+      if (host) host.isHost = false;
+      next.isHost = true;
+      room.state.hostId = next.id;
+      this.broadcast(room.state.code);
+    }, HOST_GRACE_MS);
   }
 
   setVoting(code: string, playerId: string, enabled: boolean): void {
     const room = this.requireHost(code, playerId);
     room.state.votingEnabled = enabled;
+    this.broadcast(room.state.code);
+  }
+
+  setRoundSettings(code: string, playerId: string, settings: Partial<RoundSettings>): void {
+    const room = this.requireHost(code, playerId);
+    const current = room.state.roundSettings;
+    const next: RoundSettings = { ...current };
+    if ('maxRedactions' in settings) {
+      const v = settings.maxRedactions;
+      // Clamp to a sane positive range; null/invalid = unlimited.
+      next.maxRedactions = v == null || !Number.isFinite(v) || v <= 0 ? null : Math.min(99, Math.floor(v));
+    }
+    if ('quickFire' in settings) next.quickFire = !!settings.quickFire;
+    room.state.roundSettings = next;
     this.broadcast(room.state.code);
   }
 
@@ -166,12 +256,19 @@ export class GameStore {
     source.timesUsed += 1;
     room.usedSourceIds.push(source.id);
 
+    const settings = room.state.roundSettings;
+    const timerSeconds = settings.quickFire
+      ? QUICKFIRE_SECONDS
+      : computeTimerSeconds(source.wordCount);
+
     const round: Round = {
       id: randomId('r'),
       sessionId: room.sessionId,
       sourceId: source.id,
-      timerSeconds: computeTimerSeconds(source.wordCount),
+      timerSeconds,
       startedAt: Date.now(),
+      maxRedactions: settings.maxRedactions,
+      quickFire: settings.quickFire,
       submissions: [],
       revealIndex: 0,
       votingEnabled: room.state.votingEnabled,
