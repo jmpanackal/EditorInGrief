@@ -1,0 +1,36 @@
+{
+  "name": "editor-in-grief",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A browser-based, Jackbox-style multiplayer party game where players redact screenshots to make them funny.",
+  "scripts": {
+    "seed": "node scripts/generate-seed.mjs",
+    "dev": "concurrently -n server,client -c magenta,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "tsx watch --tsconfig tsconfig.node.json server/index.ts",
+    "dev:client": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "qrcode.react": "^4.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/ws": "^8.5.13",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "ws": "^8.18.0"
+  }
+}

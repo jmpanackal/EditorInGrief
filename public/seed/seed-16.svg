@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="364" viewBox="0 0 720 364" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="364" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">SG</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">startup guy</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@disrupt_everything</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26" style="white-space:pre"><tspan x="36" dy="0">we're not a "lemonade stand." we're a</tspan><tspan x="36" dy="36">hyper-local, direct-to-consumer, citrus-based</tspan><tspan x="36" dy="36">beverage platform leveraging synergistic</tspan><tspan x="36" dy="36">sidewalk infrastructure. seeking $4M seed</tspan><tspan x="36" dy="36">round. no lemons yet.</tspan></text>
+  <line x1="36" y1="308" x2="684" y2="308" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="342" fill="#536471" font-size="18">♥ 189   ↺ 69   💬 9</text>
+  <text x="684" y="342" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>
