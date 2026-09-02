@@ -3,8 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 /**
  * RedactionEditor — the core mechanic.
  *
- * Real document-redaction: you can only PAINT BLACK over the original image's
- * pixels, never add. The output IS the original image with parts covered.
+ * Real document-redaction: you can only PAINT over the original image's pixels,
+ * never add. Each shape is filled with the auto-sampled LOCAL BACKGROUND color
+ * of the original image around it (default) so the covered text blends away, or
+ * solid black when the Blend toggle is off. The output IS the original image
+ * with parts covered.
  *
  * Design notes:
  * - Coordinates are kept in IMAGE space (the source's natural pixels). The
@@ -19,11 +22,98 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  */
 
 type Point = { x: number; y: number };
+/**
+ * Each shape carries the CSS color string it should be filled with. Instead of
+ * always painting black, we auto-sample the local background of the ORIGINAL
+ * image around/under the shape at commit time (see sampleRectFill /
+ * sampleBrushFill) so the redaction blends in and the covered text just
+ * "disappears". Storing the color on the shape keeps undo/redo and the
+ * offscreen bake deterministic — we never re-sample on re-render.
+ */
 type Shape =
-  | { type: 'rect'; x: number; y: number; w: number; h: number }
-  | { type: 'brush'; points: Point[]; thickness: number };
+  | { type: 'rect'; x: number; y: number; w: number; h: number; fill: string }
+  | { type: 'brush'; points: Point[]; thickness: number; fill: string };
 
 type Tool = 'rect' | 'brush';
+type RGB = [number, number, number];
+
+/** Solid-black fallback used when blend mode is off or sampling isn't possible. */
+const BLACK = '#000';
+
+/** Median of each RGB channel independently — robust to text/outlier pixels. */
+function medianColor(samples: RGB[]): string {
+  if (samples.length === 0) return BLACK;
+  const mid = samples.length >> 1;
+  const pick = (i: 0 | 1 | 2) => {
+    const chan = samples.map((s) => s[i]).sort((a, b) => a - b);
+    return chan[mid];
+  };
+  return `rgb(${pick(0)}, ${pick(1)}, ${pick(2)})`;
+}
+
+/**
+ * Sample a ring of pixels just OUTSIDE a rectangle's border (a small band on
+ * all four sides) from the original image and return their median color. The
+ * ring approximates the surrounding background rather than the (text) content
+ * being covered. All reads are clamped to image bounds.
+ */
+function sampleRectFill(img: ImageData, rx: number, ry: number, rw: number, rh: number): string {
+  const { width: W, height: H, data } = img;
+  const nx = Math.round(Math.min(rx, rx + rw));
+  const ny = Math.round(Math.min(ry, ry + rh));
+  const nw = Math.round(Math.abs(rw));
+  const nh = Math.round(Math.abs(rh));
+  const band = 8; // px band sampled just outside each edge
+  const x0 = Math.max(0, nx - band);
+  const y0 = Math.max(0, ny - band);
+  const x1 = Math.min(W - 1, nx + nw + band);
+  const y1 = Math.min(H - 1, ny + nh + band);
+  // subsample so cost stays flat regardless of rectangle size (~<1k reads)
+  const step = Math.max(1, Math.floor(Math.max(x1 - x0, y1 - y0) / 48));
+  const samples: RGB[] = [];
+  const push = (px: number, py: number) => {
+    const i = (py * W + px) * 4;
+    samples.push([data[i], data[i + 1], data[i + 2]]);
+  };
+  for (let px = x0; px <= x1; px += step) {
+    for (let py = y0; py <= y1; py += step) {
+      // keep only the outer ring: skip pixels strictly inside the rectangle
+      if (px >= nx && px < nx + nw && py >= ny && py < ny + nh) continue;
+      push(px, py);
+    }
+  }
+  return samples.length ? medianColor(samples) : BLACK;
+}
+
+/**
+ * Sample the local background near a freehand stroke: read small neighborhoods
+ * around a handful of points along the path (subsampled for speed) from the
+ * original image and take the median. Text strokes are thin relative to the
+ * neighborhood, so the median lands on the surrounding background.
+ */
+function sampleBrushFill(img: ImageData, points: Point[], thickness: number): string {
+  const { width: W, height: H, data } = img;
+  if (points.length === 0) return BLACK;
+  const radius = Math.max(6, Math.round(thickness)); // look a bit beyond the stroke
+  const nStep = Math.max(1, Math.floor(points.length / 12)); // <=~12 anchor points
+  const samples: RGB[] = [];
+  const push = (px: number, py: number) => {
+    if (px < 0 || py < 0 || px >= W || py >= H) return;
+    const i = (py * W + px) * 4;
+    samples.push([data[i], data[i + 1], data[i + 2]]);
+  };
+  for (let k = 0; k < points.length; k += nStep) {
+    const { x, y } = points[k];
+    const cx = Math.round(x);
+    const cy = Math.round(y);
+    // ring of samples at ~radius around the point (8 compass directions)
+    for (let a = 0; a < 8; a++) {
+      const ang = (a / 8) * Math.PI * 2;
+      push(cx + Math.round(Math.cos(ang) * radius), cy + Math.round(Math.sin(ang) * radius));
+    }
+  }
+  return samples.length ? medianColor(samples) : BLACK;
+}
 
 interface Props {
   imageUrl: string;
@@ -42,6 +132,10 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   const displayRef = useRef<HTMLCanvasElement | null>(null);
   const baseRef = useRef<HTMLCanvasElement | null>(null); // offscreen committed scene
   const imgRef = useRef<HTMLImageElement | null>(null);
+  // Untouched pixels of the ORIGINAL image. We always sample fill colors from
+  // here (never from already-redacted output) so overlapping shapes don't
+  // compound sampling errors.
+  const origDataRef = useRef<ImageData | null>(null);
 
   const shapesRef = useRef<Shape[]>([]);
   const draftRef = useRef<Shape | null>(null);
@@ -53,14 +147,28 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   const thicknessRef = useRef(28);
   const [shapeCount, setShapeCount] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  // Default = blend with sampled local background. Toggle off for solid black.
+  const [blend, setBlend] = useState(true);
+  const blendRef = useRef(true);
 
   useEffect(() => { toolRef.current = tool; }, [tool]);
   useEffect(() => { thicknessRef.current = thickness; }, [thickness]);
+  useEffect(() => { blendRef.current = blend; }, [blend]);
+
+  // Compute the fill color for a shape: sampled background (default) or black.
+  const computeFill = useCallback((s: Shape): string => {
+    if (!blendRef.current) return BLACK;
+    const orig = origDataRef.current;
+    if (!orig) return BLACK;
+    if (s.type === 'rect') return sampleRectFill(orig, s.x, s.y, s.w, s.h);
+    return sampleBrushFill(orig, s.points, s.thickness);
+  }, []);
 
   // ---- drawing primitives ------------------------------------------------
   const drawShape = useCallback((ctx: CanvasRenderingContext2D, s: Shape) => {
-    ctx.fillStyle = '#000';
-    ctx.strokeStyle = '#000';
+    const color = s.fill || BLACK;
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
     if (s.type === 'rect') {
       const x = Math.min(s.x, s.x + s.w);
       const y = Math.min(s.y, s.y + s.h);
@@ -121,6 +229,20 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
       for (const c of [displayRef.current, baseRef.current]) {
         if (c) { c.width = w; c.height = h; }
       }
+      // Snapshot the untouched original pixels once for background sampling.
+      try {
+        const snap = document.createElement('canvas');
+        snap.width = w;
+        snap.height = h;
+        const sctx = snap.getContext('2d', { willReadFrequently: true });
+        if (sctx) {
+          sctx.drawImage(img, 0, 0, w, h);
+          origDataRef.current = sctx.getImageData(0, 0, w, h);
+        }
+      } catch {
+        // e.g. a tainted canvas — fall back to solid black fills.
+        origDataRef.current = null;
+      }
       rebuildBase();
       renderDisplay();
       setLoaded(true);
@@ -155,12 +277,15 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     drawingRef.current = true;
     const p = toImageSpace(e.clientX, e.clientY);
     if (toolRef.current === 'rect') {
-      draftRef.current = { type: 'rect', x: p.x, y: p.y, w: 0, h: 0 };
+      // fill is refined live in onPointerMove once the rect has a size.
+      draftRef.current = { type: 'rect', x: p.x, y: p.y, w: 0, h: 0, fill: BLACK };
     } else {
-      draftRef.current = { type: 'brush', points: [p], thickness: thicknessRef.current };
+      const brush: Shape = { type: 'brush', points: [p], thickness: thicknessRef.current, fill: BLACK };
+      brush.fill = computeFill(brush);
+      draftRef.current = brush;
     }
     renderDisplay();
-  }, [disabled, submitted, loaded, toImageSpace, renderDisplay]);
+  }, [disabled, submitted, loaded, toImageSpace, renderDisplay, computeFill]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!drawingRef.current || !draftRef.current) return;
@@ -170,13 +295,15 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     if (draft.type === 'rect') {
       draft.w = p.x - draft.x;
       draft.h = p.y - draft.y;
+      // refine the live preview color from the current border ring
+      draft.fill = computeFill(draft);
     } else {
       const last = draft.points[draft.points.length - 1];
       // skip micro-moves to keep the point list lean
       if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 1.5) draft.points.push(p);
     }
     renderDisplay();
-  }, [toImageSpace, renderDisplay]);
+  }, [toImageSpace, renderDisplay, computeFill]);
 
   const commitDraft = useCallback(() => {
     const draft = draftRef.current;
@@ -186,6 +313,9 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     const isEmptyRect = draft.type === 'rect' && Math.abs(draft.w) < 2 && Math.abs(draft.h) < 2;
     draftRef.current = null;
     if (isEmptyRect) { renderDisplay(); return; }
+    // Authoritative fill from the ORIGINAL image for the final shape geometry;
+    // stored on the shape so undo/redo + the offscreen bake stay consistent.
+    draft.fill = computeFill(draft);
     shapesRef.current = [...shapesRef.current, draft];
     setShapeCount(shapesRef.current.length);
     // bake the new shape into the base cache (cheap: draw just this one)
@@ -193,7 +323,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     const ctx = base?.getContext('2d');
     if (ctx) drawShape(ctx, draft);
     renderDisplay();
-  }, [drawShape, renderDisplay]);
+  }, [drawShape, renderDisplay, computeFill]);
 
   const onPointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!drawingRef.current) return;
@@ -258,6 +388,20 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
           />
           <span className="tabular-nums w-6 text-right">{thickness}</span>
         </label>
+
+        <button
+          type="button"
+          onClick={() => setBlend((b) => !b)}
+          disabled={!interactive}
+          title={blend ? 'Redactions blend with the background' : 'Redactions are solid black'}
+          className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors disabled:opacity-40 ${
+            blend
+              ? 'bg-grief/20 border-grief/40 text-white'
+              : 'bg-panel2 border-white/10 text-white/80 hover:bg-white/10'
+          }`}
+        >
+          {blend ? '🎨 Blend' : '■ Black'}
+        </button>
 
         <div className="flex-1" />
 
