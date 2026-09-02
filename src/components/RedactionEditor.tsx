@@ -10,15 +10,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * with parts covered.
  *
  * Design notes:
- * - Coordinates are kept in IMAGE space (the source's natural pixels). The
- *   canvas backing store equals the natural resolution, and CSS scales it down
- *   to fit the viewport, so pointer mapping and PNG export are both trivial and
- *   the flattened result matches the original exactly.
- * - Undo removes the LAST SHAPE (a rectangle or a full brush stroke), never a
- *   pixel. We keep a shape list and re-render.
- * - Performance: committed shapes are baked onto an offscreen "base" canvas.
- *   During a drag we only blit that cache + draw the single in-progress shape,
- *   so it stays fast after dozens of edits.
+ * - Coordinates are kept in ORIGINAL IMAGE space (the source's natural pixels).
+ *   ALL redaction drawing, shape storage, hit-testing, background sampling and
+ *   the flattened PNG export operate in image space. A separate VIEW TRANSFORM
+ *   (scale + offset) maps image space onto the on-screen display canvas so the
+ *   user can pinch/wheel-zoom and pan without ever changing stored geometry.
+ * - Undo removes the LAST SHAPE; the Eraser tool removes a SPECIFIC shape the
+ *   user taps (leaving later shapes intact); Reset clears all.
+ * - Performance: committed shapes are baked onto an offscreen "base" canvas at
+ *   natural resolution. During a drag we only blit that cache (through the view
+ *   transform) + draw the single in-progress shape, so it stays fast.
  */
 
 type Point = { x: number; y: number };
@@ -34,7 +35,7 @@ type Shape =
   | { type: 'rect'; x: number; y: number; w: number; h: number; fill: string }
   | { type: 'brush'; points: Point[]; thickness: number; fill: string };
 
-type Tool = 'rect' | 'brush';
+type Tool = 'rect' | 'brush' | 'eraser';
 type RGB = [number, number, number];
 
 /** Solid-black fallback used when blend mode is off or sampling isn't possible. */
@@ -115,6 +116,39 @@ function sampleBrushFill(img: ImageData, points: Point[], thickness: number): st
   return samples.length ? medianColor(samples) : BLACK;
 }
 
+/** Shortest distance from point p to the segment a→b (image space). */
+function distToSegment(p: Point, a: Point, b: Point): number {
+  const vx = b.x - a.x;
+  const vy = b.y - a.y;
+  const wx = p.x - a.x;
+  const wy = p.y - a.y;
+  const len2 = vx * vx + vy * vy;
+  let t = len2 > 0 ? (wx * vx + wy * vy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const dx = a.x + t * vx - p.x;
+  const dy = a.y + t * vy - p.y;
+  return Math.hypot(dx, dy);
+}
+
+/** Hit-test a shape against an image-space point (used by the eraser). */
+function shapeHit(s: Shape, p: Point): boolean {
+  if (s.type === 'rect') {
+    const nx = Math.min(s.x, s.x + s.w);
+    const ny = Math.min(s.y, s.y + s.h);
+    const nw = Math.abs(s.w);
+    const nh = Math.abs(s.h);
+    const pad = 2;
+    return p.x >= nx - pad && p.x <= nx + nw + pad && p.y >= ny - pad && p.y <= ny + nh + pad;
+  }
+  const tol = s.thickness / 2 + ERASE_TOLERANCE;
+  const pts = s.points;
+  if (pts.length === 1) return Math.hypot(p.x - pts[0].x, p.y - pts[0].y) <= tol;
+  for (let i = 1; i < pts.length; i++) {
+    if (distToSegment(p, pts[i - 1], pts[i]) <= tol) return true;
+  }
+  return false;
+}
+
 interface Props {
   imageUrl: string;
   disabled?: boolean;
@@ -123,14 +157,33 @@ interface Props {
   /** Incrementing this triggers an automatic flatten+submit (used by the timer
    * auto-submit). Change the value (e.g. Date.now()) to fire once. */
   flushToken?: number;
+  /** Max redactions allowed this round (Batch 2). null/undefined = unlimited. */
+  maxRedactions?: number | null;
+  /** localStorage key for autosaving in-progress work (Batch 3). When present,
+   * shapes persist here on every change and restore on mount. */
+  storageKey?: string;
 }
 
 const MIN_THICKNESS = 6;
 const MAX_THICKNESS = 90;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 8;
+const ERASE_TOLERANCE = 6; // extra image px around a brush stroke for hit-testing
+const DRAFT_PREFIX = 'eig.draft.';
+const AUTOSAVE_MS = 3000;
+const DRAFT_TTL_MS = 2 * 60 * 60 * 1000; // prune stale autosaves older than 2h
 
-export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flushToken }: Props) {
-  const displayRef = useRef<HTMLCanvasElement | null>(null);
-  const baseRef = useRef<HTMLCanvasElement | null>(null); // offscreen committed scene
+type GestureMode = 'none' | 'draw' | 'pan' | 'pinch';
+interface Gesture {
+  mode: GestureMode;
+  panLast?: Point;
+  pinch?: { startDist: number; imgMid: Point; startZoom: number };
+}
+
+export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flushToken, maxRedactions, storageKey }: Props) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const displayRef = useRef<HTMLCanvasElement | null>(null); // on-screen (viewport res)
+  const baseRef = useRef<HTMLCanvasElement | null>(null); // offscreen committed scene (natural res)
   const imgRef = useRef<HTMLImageElement | null>(null);
   // Untouched pixels of the ORIGINAL image. We always sample fill colors from
   // here (never from already-redacted output) so overlapping shapes don't
@@ -141,19 +194,54 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   const draftRef = useRef<Shape | null>(null);
   const drawingRef = useRef(false);
 
+  // View transform: on-screen pixel = imageCoord * (fit*zoom) + offset.
+  const viewRef = useRef({ fit: 1, zoom: 1, ox: 0, oy: 0 });
+  const pointersRef = useRef<Map<number, Point>>(new Map());
+  const gestureRef = useRef<Gesture>({ mode: 'none' });
+
   const [tool, setTool] = useState<Tool>('rect');
   const toolRef = useRef<Tool>('rect');
   const [thickness, setThickness] = useState(28);
   const thicknessRef = useRef(28);
   const [shapeCount, setShapeCount] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [zoomPct, setZoomPct] = useState(100);
   // Default = blend with sampled local background. Toggle off for solid black.
   const [blend, setBlend] = useState(true);
   const blendRef = useRef(true);
+  // Straight-line / square constrain: Shift on desktop OR this toggle for touch.
+  const [constrain, setConstrain] = useState(false);
+  const constrainRef = useRef(false);
+  const shiftRef = useRef(false);
+  const spaceRef = useRef(false);
+  const [spaceDown, setSpaceDown] = useState(false);
 
   useEffect(() => { toolRef.current = tool; }, [tool]);
   useEffect(() => { thicknessRef.current = thickness; }, [thickness]);
   useEffect(() => { blendRef.current = blend; }, [blend]);
+  useEffect(() => { constrainRef.current = constrain; }, [constrain]);
+
+  const max = maxRedactions ?? null;
+  const atLimit = max != null && shapeCount >= max;
+  const atLimitRef = useRef(atLimit);
+  useEffect(() => { atLimitRef.current = atLimit; }, [atLimit]);
+
+  const constrainActive = useCallback(() => shiftRef.current || constrainRef.current, []);
+
+  // ---- autosave (localStorage) ------------------------------------------
+  const persist = useCallback(() => {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ savedAt: Date.now(), shapes: shapesRef.current }));
+    } catch {
+      /* quota / disabled storage — best effort */
+    }
+  }, [storageKey]);
+
+  const clearSaved = useCallback(() => {
+    if (!storageKey) return;
+    try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
+  }, [storageKey]);
 
   // Compute the fill color for a shape: sampled background (default) or black.
   const computeFill = useCallback((s: Shape): string => {
@@ -202,16 +290,65 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     for (const s of shapesRef.current) drawShape(ctx, s);
   }, [drawShape]);
 
+  // ---- view transform helpers -------------------------------------------
+  const computeFit = useCallback(() => {
+    const img = imgRef.current;
+    const c = displayRef.current;
+    if (!img || !c) return;
+    const fit = Math.min(c.width / (img.naturalWidth || 1), c.height / (img.naturalHeight || 1)) || 1;
+    viewRef.current.fit = fit;
+  }, []);
+
+  const clampView = useCallback(() => {
+    const c = displayRef.current;
+    const img = imgRef.current;
+    if (!c || !img) return;
+    const v = viewRef.current;
+    const scale = v.fit * v.zoom;
+    const sw = (img.naturalWidth || 1) * scale;
+    const sh = (img.naturalHeight || 1) * scale;
+    v.ox = sw <= c.width ? (c.width - sw) / 2 : Math.min(0, Math.max(c.width - sw, v.ox));
+    v.oy = sh <= c.height ? (c.height - sh) / 2 : Math.min(0, Math.max(c.height - sh, v.oy));
+  }, []);
+
   const renderDisplay = useCallback(() => {
-    const display = displayRef.current;
+    const c = displayRef.current;
     const base = baseRef.current;
-    if (!display || !base) return;
-    const ctx = display.getContext('2d');
+    if (!c || !base) return;
+    const ctx = c.getContext('2d');
     if (!ctx) return;
-    ctx.clearRect(0, 0, display.width, display.height);
+    const v = viewRef.current;
+    const scale = v.fit * v.zoom;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.setTransform(scale, 0, 0, scale, v.ox, v.oy);
     ctx.drawImage(base, 0, 0);
     if (draftRef.current) drawShape(ctx, draftRef.current);
   }, [drawShape]);
+
+  const layout = useCallback(() => {
+    computeFit();
+    clampView();
+    renderDisplay();
+  }, [computeFit, clampView, renderDisplay]);
+
+  // Resize the on-screen canvas backing store to its container (DPR-aware).
+  useEffect(() => {
+    const container = containerRef.current;
+    const c = displayRef.current;
+    if (!container || !c) return;
+    const resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.max(1, Math.round(container.clientWidth * dpr));
+      const h = Math.max(1, Math.round(container.clientHeight * dpr));
+      if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+      layout();
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [layout]);
 
   // ---- load source image -------------------------------------------------
   useEffect(() => {
@@ -226,9 +363,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
       imgRef.current = img;
       const w = img.naturalWidth || 720;
       const h = img.naturalHeight || 480;
-      for (const c of [displayRef.current, baseRef.current]) {
-        if (c) { c.width = w; c.height = h; }
-      }
+      const base = baseRef.current;
+      if (base) { base.width = w; base.height = h; }
       // Snapshot the untouched original pixels once for background sampling.
       try {
         const snap = document.createElement('canvas');
@@ -243,93 +379,345 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         // e.g. a tainted canvas — fall back to solid black fills.
         origDataRef.current = null;
       }
+      // Restore any autosaved in-progress work for THIS round/player.
+      if (storageKey) {
+        try {
+          const raw = localStorage.getItem(storageKey);
+          if (raw) {
+            const parsed = JSON.parse(raw) as { shapes?: Shape[] };
+            if (Array.isArray(parsed.shapes) && parsed.shapes.length) {
+              shapesRef.current = parsed.shapes;
+              setShapeCount(parsed.shapes.length);
+            }
+          }
+        } catch { /* ignore corrupt entry */ }
+      }
       rebuildBase();
-      renderDisplay();
+      layout();
       setLoaded(true);
     };
     img.onerror = () => setLoaded(false);
     img.src = imageUrl;
 
     return () => { img.onload = null; img.onerror = null; };
-  }, [imageUrl, rebuildBase, renderDisplay]);
+  }, [imageUrl, rebuildBase, layout, storageKey]);
 
-  // ---- pointer mapping ---------------------------------------------------
-  const toImageSpace = useCallback((clientX: number, clientY: number): Point => {
-    const canvas = displayRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    const sx = canvas.width / rect.width;
-    const sy = canvas.height / rect.height;
+  // Prune stale autosave entries from other rounds on mount.
+  useEffect(() => {
+    try {
+      const now = Date.now();
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(DRAFT_PREFIX) || key === storageKey) continue;
+        try {
+          const parsed = JSON.parse(localStorage.getItem(key) || '{}') as { savedAt?: number };
+          if (!parsed.savedAt || now - parsed.savedAt > DRAFT_TTL_MS) localStorage.removeItem(key);
+        } catch {
+          localStorage.removeItem(key);
+        }
+      }
+    } catch { /* ignore */ }
+  }, [storageKey]);
+
+  // Periodic autosave safety net (in addition to per-change saves).
+  useEffect(() => {
+    if (!storageKey) return;
+    const id = setInterval(() => { if (shapesRef.current.length) persist(); }, AUTOSAVE_MS);
+    return () => clearInterval(id);
+  }, [storageKey, persist]);
+
+  // ---- pointer / coordinate mapping -------------------------------------
+  const clientToBacking = useCallback((clientX: number, clientY: number): Point => {
+    const c = displayRef.current!;
+    const rect = c.getBoundingClientRect();
     return {
-      x: Math.max(0, Math.min(canvas.width, (clientX - rect.left) * sx)),
-      y: Math.max(0, Math.min(canvas.height, (clientY - rect.top) * sy)),
+      x: (clientX - rect.left) * (c.width / rect.width),
+      y: (clientY - rect.top) * (c.height / rect.height),
     };
   }, []);
 
-  // ---- pointer handlers --------------------------------------------------
-  const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (disabled || submitted || !loaded) return;
-    e.preventDefault();
-    try {
-      (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
-    } catch {
-      /* pointer capture is best-effort; ignore if unavailable */
+  const backingToImage = useCallback((bx: number, by: number): Point => {
+    const v = viewRef.current;
+    const scale = v.fit * v.zoom;
+    return { x: (bx - v.ox) / scale, y: (by - v.oy) / scale };
+  }, []);
+
+  const toImage = useCallback((clientX: number, clientY: number, clamp = true): Point => {
+    const b = clientToBacking(clientX, clientY);
+    const p = backingToImage(b.x, b.y);
+    const img = imgRef.current;
+    if (!clamp || !img) return p;
+    return {
+      x: Math.max(0, Math.min(img.naturalWidth, p.x)),
+      y: Math.max(0, Math.min(img.naturalHeight, p.y)),
+    };
+  }, [clientToBacking, backingToImage]);
+
+  // ---- zoom helpers ------------------------------------------------------
+  const applyZoomAt = useCallback((bx: number, by: number, factor: number) => {
+    const v = viewRef.current;
+    const before = backingToImage(bx, by);
+    v.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, v.zoom * factor));
+    const scale = v.fit * v.zoom;
+    v.ox = bx - before.x * scale;
+    v.oy = by - before.y * scale;
+    clampView();
+    renderDisplay();
+    setZoomPct(Math.round(v.zoom * 100));
+  }, [backingToImage, clampView, renderDisplay]);
+
+  const zoomButton = useCallback((factor: number) => {
+    const c = displayRef.current;
+    if (!c) return;
+    applyZoomAt(c.width / 2, c.height / 2, factor);
+  }, [applyZoomAt]);
+
+  const resetView = useCallback(() => {
+    const v = viewRef.current;
+    v.zoom = 1;
+    layout();
+    setZoomPct(100);
+  }, [layout]);
+
+  // Wheel zoom (attached non-passive so we can preventDefault).
+  useEffect(() => {
+    const c = displayRef.current;
+    if (!c) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const b = clientToBacking(e.clientX, e.clientY);
+      applyZoomAt(b.x, b.y, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+    };
+    c.addEventListener('wheel', onWheel, { passive: false });
+    return () => c.removeEventListener('wheel', onWheel);
+  }, [clientToBacking, applyZoomAt]);
+
+  // Track Shift (constrain) and Space (pan) on desktop.
+  useEffect(() => {
+    const isTypingTarget = (t: EventTarget | null) => {
+      const el = t as HTMLElement | null;
+      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    };
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') shiftRef.current = true;
+      if (e.code === 'Space' && !isTypingTarget(document.activeElement)) {
+        spaceRef.current = true;
+        setSpaceDown(true);
+        e.preventDefault();
+      }
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') shiftRef.current = false;
+      if (e.code === 'Space') { spaceRef.current = false; setSpaceDown(false); }
+    };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+  }, []);
+
+  // ---- pinch / pan gesture helpers --------------------------------------
+  const startPinch = useCallback(() => {
+    const pts = [...pointersRef.current.values()];
+    if (pts.length < 2) return;
+    const [a, b] = pts;
+    const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    const midClient = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const bmid = clientToBacking(midClient.x, midClient.y);
+    gestureRef.current = {
+      mode: 'pinch',
+      pinch: { startDist: dist, imgMid: backingToImage(bmid.x, bmid.y), startZoom: viewRef.current.zoom },
+    };
+  }, [clientToBacking, backingToImage]);
+
+  const doPinch = useCallback(() => {
+    const pts = [...pointersRef.current.values()];
+    const g = gestureRef.current.pinch;
+    if (pts.length < 2 || !g) return;
+    const [a, b] = pts;
+    const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    const midClient = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const bmid = clientToBacking(midClient.x, midClient.y);
+    const v = viewRef.current;
+    v.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, g.startZoom * (dist / g.startDist)));
+    const scale = v.fit * v.zoom;
+    v.ox = bmid.x - g.imgMid.x * scale;
+    v.oy = bmid.y - g.imgMid.y * scale;
+    clampView();
+    renderDisplay();
+    setZoomPct(Math.round(v.zoom * 100));
+  }, [clientToBacking, clampView, renderDisplay]);
+
+  const doPan = useCallback((clientX: number, clientY: number) => {
+    const g = gestureRef.current;
+    if (!g.panLast) return;
+    const c = displayRef.current!;
+    const rect = c.getBoundingClientRect();
+    const dx = (clientX - g.panLast.x) * (c.width / rect.width);
+    const dy = (clientY - g.panLast.y) * (c.height / rect.height);
+    const v = viewRef.current;
+    v.ox += dx;
+    v.oy += dy;
+    g.panLast = { x: clientX, y: clientY };
+    clampView();
+    renderDisplay();
+  }, [clampView, renderDisplay]);
+
+  // ---- draw / erase ------------------------------------------------------
+  const eraseAt = useCallback((p: Point) => {
+    const shapes = shapesRef.current;
+    for (let i = shapes.length - 1; i >= 0; i--) {
+      if (shapeHit(shapes[i], p)) {
+        shapesRef.current = [...shapes.slice(0, i), ...shapes.slice(i + 1)];
+        setShapeCount(shapesRef.current.length);
+        rebuildBase();
+        renderDisplay();
+        persist();
+        return;
+      }
     }
-    drawingRef.current = true;
-    const p = toImageSpace(e.clientX, e.clientY);
+  }, [rebuildBase, renderDisplay, persist]);
+
+  const beginDraw = useCallback((p: Point) => {
     if (toolRef.current === 'rect') {
-      // fill is refined live in onPointerMove once the rect has a size.
       draftRef.current = { type: 'rect', x: p.x, y: p.y, w: 0, h: 0, fill: BLACK };
     } else {
       const brush: Shape = { type: 'brush', points: [p], thickness: thicknessRef.current, fill: BLACK };
       brush.fill = computeFill(brush);
       draftRef.current = brush;
     }
+    drawingRef.current = true;
     renderDisplay();
-  }, [disabled, submitted, loaded, toImageSpace, renderDisplay, computeFill]);
+  }, [computeFill, renderDisplay]);
 
-  const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!drawingRef.current || !draftRef.current) return;
-    e.preventDefault();
-    const p = toImageSpace(e.clientX, e.clientY);
+  const moveDraw = useCallback((p: Point) => {
     const draft = draftRef.current;
+    if (!draft) return;
     if (draft.type === 'rect') {
-      draft.w = p.x - draft.x;
-      draft.h = p.y - draft.y;
-      // refine the live preview color from the current border ring
+      let w = p.x - draft.x;
+      let h = p.y - draft.y;
+      if (constrainActive()) {
+        const s = Math.max(Math.abs(w), Math.abs(h));
+        w = (w < 0 ? -1 : 1) * s;
+        h = (h < 0 ? -1 : 1) * s;
+      }
+      draft.w = w;
+      draft.h = h;
       draft.fill = computeFill(draft);
+    } else if (constrainActive()) {
+      draft.points = [draft.points[0], p];
     } else {
       const last = draft.points[draft.points.length - 1];
-      // skip micro-moves to keep the point list lean
       if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 1.5) draft.points.push(p);
     }
     renderDisplay();
-  }, [toImageSpace, renderDisplay, computeFill]);
+  }, [constrainActive, computeFill, renderDisplay]);
 
   const commitDraft = useCallback(() => {
     const draft = draftRef.current;
     drawingRef.current = false;
     if (!draft) return;
-    // discard trivially-empty rectangles (a tap with the rect tool)
     const isEmptyRect = draft.type === 'rect' && Math.abs(draft.w) < 2 && Math.abs(draft.h) < 2;
     draftRef.current = null;
     if (isEmptyRect) { renderDisplay(); return; }
-    // Authoritative fill from the ORIGINAL image for the final shape geometry;
-    // stored on the shape so undo/redo + the offscreen bake stay consistent.
+    // Authoritative fill from the ORIGINAL image for the final geometry.
     draft.fill = computeFill(draft);
     shapesRef.current = [...shapesRef.current, draft];
     setShapeCount(shapesRef.current.length);
-    // bake the new shape into the base cache (cheap: draw just this one)
     const base = baseRef.current;
     const ctx = base?.getContext('2d');
     if (ctx) drawShape(ctx, draft);
     renderDisplay();
-  }, [drawShape, renderDisplay, computeFill]);
+    persist();
+  }, [computeFill, drawShape, renderDisplay, persist]);
 
-  const onPointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!drawingRef.current) return;
+  const cancelDraft = useCallback(() => {
+    if (draftRef.current) { draftRef.current = null; renderDisplay(); }
+    drawingRef.current = false;
+  }, [renderDisplay]);
+
+  const interactive = loaded && !disabled && !submitted;
+  const interactiveRef = useRef(interactive);
+  useEffect(() => { interactiveRef.current = interactive; }, [interactive]);
+
+  // ---- pointer handlers --------------------------------------------------
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!loaded) return;
     e.preventDefault();
-    commitDraft();
-  }, [commitDraft]);
+    try { (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId); } catch { /* best effort */ }
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Two+ fingers => pinch-zoom/pan; abandon any in-progress stroke.
+    if (pointersRef.current.size >= 2) {
+      cancelDraft();
+      startPinch();
+      return;
+    }
+
+    // Desktop pan: middle mouse OR space held.
+    const wantPan = e.pointerType !== 'touch' && (e.button === 1 || spaceRef.current);
+    if (wantPan) {
+      gestureRef.current = { mode: 'pan', panLast: { x: e.clientX, y: e.clientY } };
+      return;
+    }
+
+    if (!interactiveRef.current) return;
+
+    if (toolRef.current === 'eraser') {
+      gestureRef.current = { mode: 'none' };
+      eraseAt(toImage(e.clientX, e.clientY, false));
+      return;
+    }
+
+    // Stroke-limit: block starting a NEW shape once the cap is reached.
+    if (atLimitRef.current) return;
+
+    gestureRef.current = { mode: 'draw' };
+    beginDraw(toImage(e.clientX, e.clientY));
+  }, [loaded, cancelDraft, startPinch, eraseAt, toImage, atLimitRef, beginDraw]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const mode = gestureRef.current.mode;
+    if (mode === 'pinch') { e.preventDefault(); doPinch(); return; }
+    if (mode === 'pan') { e.preventDefault(); doPan(e.clientX, e.clientY); return; }
+    if (mode === 'draw' && drawingRef.current) {
+      e.preventDefault();
+      moveDraw(toImage(e.clientX, e.clientY));
+    }
+  }, [doPinch, doPan, moveDraw, toImage]);
+
+  const endPointer = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!pointersRef.current.has(e.pointerId)) return;
+    e.preventDefault();
+    try { (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    const wasMode = gestureRef.current.mode;
+    pointersRef.current.delete(e.pointerId);
+    const remaining = pointersRef.current.size;
+
+    if (wasMode === 'draw') {
+      if (drawingRef.current) commitDraft();
+      gestureRef.current = { mode: 'none' };
+      return;
+    }
+    if (wasMode === 'pinch') {
+      if (remaining >= 2) { startPinch(); }
+      else if (remaining === 1) {
+        const [pt] = [...pointersRef.current.values()];
+        gestureRef.current = { mode: 'pan', panLast: { ...pt } };
+      } else gestureRef.current = { mode: 'none' };
+      return;
+    }
+    if (wasMode === 'pan') {
+      if (remaining >= 2) startPinch();
+      else if (remaining === 1) {
+        const [pt] = [...pointersRef.current.values()];
+        gestureRef.current = { mode: 'pan', panLast: { ...pt } };
+      } else gestureRef.current = { mode: 'none' };
+      return;
+    }
+    gestureRef.current = { mode: 'none' };
+  }, [commitDraft, startPinch]);
 
   // ---- toolbar actions ---------------------------------------------------
   const undo = useCallback(() => {
@@ -338,7 +726,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     setShapeCount(shapesRef.current.length);
     rebuildBase();
     renderDisplay();
-  }, [rebuildBase, renderDisplay]);
+    persist();
+  }, [rebuildBase, renderDisplay, persist]);
 
   const reset = useCallback(() => {
     shapesRef.current = [];
@@ -346,15 +735,17 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     setShapeCount(0);
     rebuildBase();
     renderDisplay();
-  }, [rebuildBase, renderDisplay]);
+    persist();
+  }, [rebuildBase, renderDisplay, persist]);
 
   const handleSubmit = useCallback(() => {
     const base = baseRef.current;
     if (!base) return;
     // base already holds image + all committed shapes at natural resolution.
     const png = base.toDataURL('image/png');
+    clearSaved();
     onSubmit(png);
-  }, [onSubmit]);
+  }, [onSubmit, clearSaved]);
 
   // Timer-driven auto-submit: fire once whenever flushToken changes to a truthy value.
   const lastFlush = useRef(0);
@@ -364,7 +755,17 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     if (loaded && !submitted) handleSubmit();
   }, [flushToken, loaded, submitted, handleSubmit]);
 
-  const interactive = loaded && !disabled && !submitted;
+  // Once the server confirms our submission, drop the autosave.
+  useEffect(() => { if (submitted) clearSaved(); }, [submitted, clearSaved]);
+
+  const remaining = max != null ? Math.max(0, max - shapeCount) : null;
+  const cursor = !interactive
+    ? 'default'
+    : spaceDown
+      ? 'grab'
+      : tool === 'eraser'
+        ? 'cell'
+        : 'crosshair';
 
   return (
     <div className="flex flex-col gap-3">
@@ -373,6 +774,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         <div className="flex rounded-lg overflow-hidden border border-white/10">
           <ToolButton active={tool === 'rect'} onClick={() => setTool('rect')} disabled={!interactive} label="▭ Box" />
           <ToolButton active={tool === 'brush'} onClick={() => setTool('brush')} disabled={!interactive} label="✎ Brush" />
+          <ToolButton active={tool === 'eraser'} onClick={() => setTool('eraser')} disabled={!interactive} label="⌫ Eraser" />
         </div>
 
         <label className={`flex items-center gap-2 text-sm px-2 py-1 rounded-lg bg-panel2 ${tool === 'brush' ? 'opacity-100' : 'opacity-40'}`}>
@@ -403,27 +805,57 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
           {blend ? '🎨 Blend' : '■ Black'}
         </button>
 
+        <button
+          type="button"
+          onClick={() => setConstrain((c) => !c)}
+          disabled={!interactive}
+          title="Constrain: perfect squares (Box) / straight lines (Brush). Hold Shift on desktop."
+          className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors disabled:opacity-40 ${
+            constrain
+              ? 'bg-grief/20 border-grief/40 text-white'
+              : 'bg-panel2 border-white/10 text-white/80 hover:bg-white/10'
+          }`}
+        >
+          📐 Straight
+        </button>
+
         <div className="flex-1" />
+
+        {/* Zoom controls */}
+        <div className="flex items-center rounded-lg overflow-hidden border border-white/10 text-sm">
+          <button type="button" onClick={() => zoomButton(1 / 1.25)} disabled={!loaded} className="px-2.5 py-2 bg-panel2 text-white/80 hover:bg-white/10 disabled:opacity-40" title="Zoom out">−</button>
+          <button type="button" onClick={resetView} disabled={!loaded} className="px-2 py-2 bg-panel2 text-white/70 hover:bg-white/10 disabled:opacity-40 tabular-nums w-14" title="Reset view">{zoomPct}%</button>
+          <button type="button" onClick={() => zoomButton(1.25)} disabled={!loaded} className="px-2.5 py-2 bg-panel2 text-white/80 hover:bg-white/10 disabled:opacity-40" title="Zoom in">+</button>
+        </div>
 
         <button onClick={undo} disabled={!interactive || shapeCount === 0} className="btn-secondary">↶ Undo</button>
         <button onClick={reset} disabled={!interactive || shapeCount === 0} className="btn-secondary">Reset</button>
       </div>
 
-      {/* Canvas */}
-      <div className="relative w-full flex justify-center rounded-xl overflow-hidden bg-panel2 ring-1 ring-white/10">
+      {/* Canvas viewport */}
+      <div
+        ref={containerRef}
+        className="relative w-full rounded-xl overflow-hidden bg-panel2 ring-1 ring-white/10"
+        style={{ height: '60vh', maxHeight: '640px', touchAction: 'none' }}
+      >
         <canvas
           ref={displayRef}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          className="max-w-full h-auto block"
-          style={{ touchAction: 'none', cursor: interactive ? 'crosshair' : 'default', maxHeight: '62vh' }}
+          onPointerUp={endPointer}
+          onPointerCancel={endPointer}
+          className="block w-full h-full"
+          style={{ touchAction: 'none', cursor }}
         />
-        {/* offscreen committed-scene cache */}
+        {/* offscreen committed-scene cache (natural resolution) */}
         <canvas ref={baseRef} className="hidden" />
         {!loaded && (
           <div className="absolute inset-0 grid place-items-center text-white/60 text-sm">Loading source…</div>
+        )}
+        {remaining != null && (
+          <div className={`absolute top-2 left-2 pill text-xs ${atLimit ? 'bg-grief/30 text-grief border-grief/50' : 'bg-black/50 text-white/80 border-white/10'}`}>
+            {remaining} redaction{remaining === 1 ? '' : 's'} left
+          </div>
         )}
         {submitted && (
           <div className="absolute inset-0 grid place-items-center bg-black/60 backdrop-blur-sm">
@@ -434,10 +866,15 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
           </div>
         )}
       </div>
+      <p className="text-[11px] text-white/40 -mt-1">
+        Pinch or scroll to zoom · two-finger drag (or Space/middle-drag) to pan · {tool === 'eraser' ? 'tap a redaction to remove it' : 'Shift / 📐 for straight lines & squares'}
+      </p>
 
       {/* Submit */}
       <div className="flex items-center gap-3">
-        <span className="text-xs text-white/50">{shapeCount} edit{shapeCount === 1 ? '' : 's'}</span>
+        <span className="text-xs text-white/50">
+          {shapeCount} edit{shapeCount === 1 ? '' : 's'}{max != null ? ` · max ${max}` : ''}
+        </span>
         <div className="flex-1" />
         <button onClick={handleSubmit} disabled={!interactive} className="btn-primary">
           {submitted ? 'Submitted' : 'Submit redaction'}
