@@ -27,7 +27,11 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
       <div className="card p-4 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-xs text-white/50 uppercase tracking-wide">Round {state.roundNumber}</div>
+            <div className="text-xs text-white/50 uppercase tracking-wide flex items-center gap-2">
+              Round {state.roundNumber}
+              {round.quickFire && <span className="pill bg-amber-500/20 text-amber-300 border-amber-500/40">⚡ Quick-fire</span>}
+              {round.maxRedactions != null && <span className="pill">max {round.maxRedactions}</span>}
+            </div>
             <div className="text-sm text-white/70">Black out the pixels to make it funnier.</div>
           </div>
           <span className="pill">{readyCount}/{connected} submitted</span>
@@ -46,6 +50,8 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
           onSubmit={handleSubmit}
           submitted={submittedByMe}
           flushToken={flushToken}
+          maxRedactions={round.maxRedactions}
+          storageKey={room.playerId ? `eig.draft.${round.id}.${room.playerId}` : undefined}
         />
       </div>
 

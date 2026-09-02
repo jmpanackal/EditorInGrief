@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { RoomState, ServerMessage } from '@shared/types';
+import type { RoomState, RoundSettings, ServerMessage } from '@shared/types';
 import type { ConnectionStatus, Transport } from '../transport/Transport';
 import { WebSocketTransport } from '../transport/WebSocketTransport';
 
@@ -43,6 +43,7 @@ export interface RoomApi {
   leave: () => void;
 
   setVoting: (enabled: boolean) => void;
+  setRoundSettings: (settings: Partial<RoundSettings>) => void;
   startRound: (sourceId?: string) => void;
   submit: (roundId: string, editedImageUrl: string) => void;
   advanceReveal: (direction?: 1 | -1) => void;
@@ -140,6 +141,7 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
   }, []);
 
   const setVoting = useCallback((enabled: boolean) => send({ type: 'setVoting', enabled }), [send]);
+  const setRoundSettings = useCallback((settings: Partial<RoundSettings>) => send({ type: 'setRoundSettings', settings }), [send]);
   const startRound = useCallback((sourceId?: string) => send({ type: 'startRound', sourceId }), [send]);
   const submit = useCallback((roundId: string, editedImageUrl: string) => send({ type: 'submit', roundId, editedImageUrl }), [send]);
   const advanceReveal = useCallback((direction: 1 | -1 = 1) => send({ type: 'advanceReveal', direction }), [send]);
@@ -162,6 +164,7 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
     joinRoom,
     leave,
     setVoting,
+    setRoundSettings,
     startRound,
     submit,
     advanceReveal,

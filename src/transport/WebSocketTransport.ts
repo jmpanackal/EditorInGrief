@@ -21,6 +21,7 @@ export class WebSocketTransport implements Transport {
   private queue: ClientMessage[] = [];
   private shouldReconnect = true;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
 
   constructor(url: string = defaultWsUrl()) {
     this.url = url;
@@ -42,6 +43,7 @@ export class WebSocketTransport implements Transport {
     }
 
     this.ws.onopen = () => {
+      this.reconnectAttempts = 0; // reset backoff on a healthy connection
       this.setStatus('open');
       // flush any queued messages
       const pending = this.queue.splice(0);
@@ -67,10 +69,15 @@ export class WebSocketTransport implements Transport {
 
   private scheduleReconnect(): void {
     if (!this.shouldReconnect || this.reconnectTimer) return;
+    // Exponential backoff with jitter, capped — so a wifi hiccup reconnects fast
+    // but we don't hammer a downed server.
+    const base = Math.min(15000, 500 * 2 ** this.reconnectAttempts);
+    const delay = base / 2 + Math.random() * (base / 2);
+    this.reconnectAttempts++;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.open();
-    }, 1200);
+    }, delay);
   }
 
   send(message: ClientMessage): void {

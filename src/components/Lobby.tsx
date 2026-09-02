@@ -4,6 +4,7 @@ import { PlayerList } from './PlayerList';
 
 export function Lobby({ room }: { room: RoomApi }) {
   const state = room.state!;
+  const settings = state.roundSettings;
   const joinUrl = `${window.location.origin}/?code=${state.code}`;
   const canStart = state.players.filter((p) => p.connected).length >= 1;
 
@@ -41,6 +42,37 @@ export function Lobby({ room }: { room: RoomApi }) {
                 className="w-5 h-5 accent-grief"
               />
             </label>
+
+            {/* Quick-fire mode */}
+            <label className="flex items-center justify-between px-3 py-2 rounded-lg bg-panel2 border border-white/10">
+              <span className="text-sm">⚡ Quick-fire <span className="text-white/40">(short fixed timer for fast pacing)</span></span>
+              <input
+                type="checkbox"
+                checked={settings.quickFire}
+                onChange={(e) => room.setRoundSettings({ quickFire: e.target.checked })}
+                className="w-5 h-5 accent-grief"
+              />
+            </label>
+
+            {/* Stroke limit */}
+            <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-panel2 border border-white/10">
+              <div className="text-sm">
+                Redaction limit
+                <span className="text-white/40 block text-xs">Cap edits per round (0 = unlimited)</span>
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={99}
+                value={settings.maxRedactions ?? 0}
+                onChange={(e) => {
+                  const n = Math.floor(Number(e.target.value));
+                  room.setRoundSettings({ maxRedactions: Number.isFinite(n) && n > 0 ? n : null });
+                }}
+                className="field w-20 text-center"
+              />
+            </div>
+
             <button className="btn-primary text-lg py-3" disabled={!canStart} onClick={() => room.startRound()}>
               Start round →
             </button>
@@ -49,8 +81,13 @@ export function Lobby({ room }: { room: RoomApi }) {
             </p>
           </div>
         ) : (
-          <div className="mt-2 text-center text-white/60 text-sm py-3 rounded-lg bg-panel2 border border-white/10">
-            Waiting for the host to start the round…
+          <div className="mt-2 flex flex-col gap-2 text-center text-white/60 text-sm py-3 rounded-lg bg-panel2 border border-white/10">
+            <div>Waiting for the host to start the round…</div>
+            <div className="flex items-center justify-center gap-2 text-xs">
+              {settings.quickFire && <span className="pill bg-amber-500/20 text-amber-300 border-amber-500/40">⚡ Quick-fire</span>}
+              {settings.maxRedactions != null && <span className="pill">max {settings.maxRedactions} edits</span>}
+              {state.votingEnabled && <span className="pill">voting on</span>}
+            </div>
           </div>
         )}
       </div>
