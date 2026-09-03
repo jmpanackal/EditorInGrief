@@ -18,9 +18,8 @@ export function Reveal({ room }: { room: RoomApi }) {
   if (subs.length === 0) {
     return (
       <div className="card p-10 text-center animate-fade-up">
-        <div className="text-5xl mb-3">😶</div>
-        <div className="font-display text-xl font-bold">No submissions this round</div>
-        <p className="text-white/60 mt-2">Nobody blacked anything out in time.</p>
+        <div className="stamp stamp-ink text-lg animate-stamp-in">No copy filed</div>
+        <p className="text-ink2 mt-4">Nobody blacked anything out before the deadline.</p>
         {room.isHost && (
           <button className="btn-primary mt-5" onClick={room.showScoreboard}>Continue →</button>
         )}
@@ -32,14 +31,14 @@ export function Reveal({ room }: { room: RoomApi }) {
     <div className="flex flex-col gap-4 animate-fade-up">
       <div className="card p-4 flex items-center justify-between gap-3">
         <div>
-          <div className="text-xs text-white/45 uppercase tracking-widest font-semibold">🎭 The Reveal</div>
-          <div className="font-display text-xl font-bold">{owner?.nickname ?? 'Unknown'}’s redaction</div>
+          <div className="kicker text-[11px]">Off the presses</div>
+          <div className="font-display font-black text-xl">{owner?.nickname ?? 'Unknown'}’s edit</div>
         </div>
-        <span className="pill bg-blurple/15 text-blurple border-blurple/30">{idx + 1} / {subs.length}</span>
+        <span className="pill">{idx + 1} / {subs.length}</span>
       </div>
 
       <div className="card p-4">
-        <div className="relative w-full flex justify-center rounded-2xl overflow-hidden bg-panel2 ring-1 ring-white/10">
+        <div className="relative w-full flex justify-center rounded-[2px] overflow-hidden bg-paper2 border-2 border-ink">
           <img
             key={`${current.id}-${showOriginal}`}
             src={showOriginal ? source.imageUrl : current.editedImageUrl}
@@ -47,9 +46,7 @@ export function Reveal({ room }: { room: RoomApi }) {
             className="max-w-full h-auto animate-pop"
             style={{ maxHeight: '58vh' }}
           />
-          {showOriginal && (
-            <span className="absolute top-2 left-2 pill bg-black/70">original</span>
-          )}
+          {showOriginal && <span className="absolute top-2 left-2 pill">uncensored proof</span>}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -61,12 +58,12 @@ export function Reveal({ room }: { room: RoomApi }) {
             onTouchStart={() => setShowOriginal(true)}
             onTouchEnd={() => setShowOriginal(false)}
           >
-            👁 Hold to compare original
+            👁 Hold to see the proof
           </button>
 
           {round.votingEnabled && (
             <>
-              <span className="pill bg-grief/15 text-grieflite border-grief/30">♥ {current.votesCount} vote{current.votesCount === 1 ? '' : 's'}</span>
+              <span className="pill">♥ {current.votesCount} vote{current.votesCount === 1 ? '' : 's'}</span>
               {canVote && (
                 <button
                   className={myVote === current.id ? 'btn-primary' : 'btn-secondary'}
@@ -76,45 +73,57 @@ export function Reveal({ room }: { room: RoomApi }) {
                 </button>
               )}
               {!canVote && current.playerId === room.playerId && (
-                <span className="text-xs text-white/40">(you can’t vote for your own)</span>
+                <span className="text-xs text-ink3 italic">(you can’t vote for your own)</span>
               )}
             </>
           )}
         </div>
       </div>
 
-      {/* Filmstrip */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {subs.map((s, i) => {
-          const p = state.players.find((pl) => pl.id === s.playerId);
-          return (
-            <div
-              key={s.id}
-              className={`relative shrink-0 w-20 rounded-xl overflow-hidden ring-2 transition ${i === idx ? 'ring-grief scale-105' : 'ring-white/10 opacity-70 hover:opacity-100'}`}
-              title={p?.nickname}
-            >
-              <img src={s.editedImageUrl} alt="" className="w-full h-16 object-cover object-top" />
-              {round.votingEnabled && s.votesCount > 0 && (
-                <span className="absolute bottom-0 right-0 text-[10px] px-1 bg-black/70 rounded-tl">♥{s.votesCount}</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {/* Filmstrip — only meaningful with more than one submission. The vertical
+          padding gives the active item's ring-offset room so it isn't clipped. */}
+      {subs.length > 1 && (
+        <div>
+          <div className="kicker text-[11px] mb-1.5 px-0.5">The Late Edition — all filings</div>
+          <div className="flex gap-3 overflow-x-auto px-1 py-2">
+            {subs.map((s, i) => {
+              const p = state.players.find((pl) => pl.id === s.playerId);
+              const active = i === idx;
+              return (
+                <div key={s.id} className="shrink-0 w-24 flex flex-col items-center gap-1" title={p?.nickname}>
+                  <div
+                    className={`relative w-full rounded-[2px] overflow-hidden border-2 ring-offset-2 ring-offset-paper transition ${
+                      active ? 'border-grief ring-2 ring-grief' : 'border-ink opacity-75 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={s.editedImageUrl} alt="" className="w-full h-16 object-cover object-top" />
+                    {round.votingEnabled && s.votesCount > 0 && (
+                      <span className="absolute bottom-0 right-0 text-[10px] px-1 bg-ink text-paper">♥{s.votesCount}</span>
+                    )}
+                  </div>
+                  <span className={`text-[11px] truncate max-w-full ${active ? 'text-grief font-bold' : 'text-ink3'}`}>
+                    {p?.nickname ?? '—'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {room.isHost ? (
         <div className="flex items-center gap-2">
           <button className="btn-secondary" disabled={idx === 0} onClick={() => room.advanceReveal(-1)}>← Prev</button>
           {isLast ? (
             <button className="btn-primary flex-1" onClick={room.showScoreboard}>
-              {round.votingEnabled ? 'Tally votes → Scoreboard' : 'Finish round →'}
+              {round.votingEnabled ? 'Tally votes → Scoreboard' : 'Put it to bed →'}
             </button>
           ) : (
-            <button className="btn-primary flex-1" onClick={() => room.advanceReveal(1)}>Next →</button>
+            <button className="btn-primary flex-1" onClick={() => room.advanceReveal(1)}>Next edit →</button>
           )}
         </div>
       ) : (
-        <p className="text-center text-white/50 text-sm">🎬 The host is driving the reveal.</p>
+        <p className="text-center text-ink3 text-sm italic">The Editor is running the reveal.</p>
       )}
     </div>
   );

@@ -34,12 +34,14 @@ type Point = { x: number; y: number };
  * offscreen bake deterministic — we never re-sample on re-render.
  */
 type Shape =
-  | { type: 'rect'; x: number; y: number; w: number; h: number; fill: string }
+  | { type: 'rect'; x: number; y: number; w: number; h: number; fill: string; ocrKey?: string }
   | { type: 'brush'; points: Point[]; thickness: number; fill: string };
 
 type Tool = 'rect' | 'brush' | 'eraser' | 'words';
 /** Redact whole words (default) or individual letters in the tap/drag tool. */
 type WordGranularity = 'word' | 'letter';
+/** An OCR box tagged with a STABLE key so tap-toggle can find/remove its shape. */
+type KeyedBox = OcrBox & { key: string };
 type RGB = [number, number, number];
 
 /**
@@ -172,6 +174,31 @@ function boxIntersectsRect(b: OcrBox, r: { x0: number; y0: number; x1: number; y
   return b.x0 <= r.x1 && b.x1 >= r.x0 && b.y0 <= r.y1 && b.y1 >= r.y0;
 }
 
+/**
+ * Flatten OCR results into tappable boxes with STABLE keys. Word mode keys each
+ * word by its index (`w{i}`); letter mode keys each symbol (`s{i}_{j}`), falling
+ * back to the word box when a word has no symbol boxes. Keys let tap-to-toggle
+ * find the exact shape a previous tap created so a second tap can remove it.
+ */
+function keyedBoxesFor(words: OcrWord[], granularity: WordGranularity): KeyedBox[] {
+  if (granularity === 'letter') {
+    const out: KeyedBox[] = [];
+    words.forEach((w, i) => {
+      if (w.symbols.length) w.symbols.forEach((s, j) => out.push({ ...s, key: `s${i}_${j}` }));
+      else out.push({ ...w, key: `w${i}` });
+    });
+    return out;
+  }
+  return words.map((w, i) => ({ ...w, key: `w${i}` }));
+}
+
+/** Keys of OCR-originated redactions currently on the canvas (for underline state). */
+function redactedKeySet(shapes: Shape[]): Set<string> {
+  const set = new Set<string>();
+  for (const s of shapes) if (s.type === 'rect' && s.ocrKey) set.add(s.ocrKey);
+  return set;
+}
+
 /** Stroke a polyline (or a single-point dot outline) in image space. */
 function strokePath(ctx: CanvasRenderingContext2D, points: Point[], dotRadius: number): void {
   if (points.length === 0) return;
@@ -232,17 +259,25 @@ function drawActiveOutline(ctx: CanvasRenderingContext2D, s: Shape, scale: numbe
   ctx.restore();
 }
 
-/** Faint outlines of detected OCR boxes so the user knows what's tappable. */
-function drawDetectedBoxes(ctx: CanvasRenderingContext2D, boxes: OcrBox[], scale: number): void {
+/**
+ * UNDERLINE affordance: a thin rule beneath each detected word/letter signals
+ * it's tappable — far lighter than boxing every glyph. Already-redacted boxes
+ * get a bolder RED underline (tap again to reveal); available ones a subtle ink
+ * rule. Underlines are inset slightly and use an on-screen-constant thickness.
+ */
+function drawUnderlines(ctx: CanvasRenderingContext2D, boxes: KeyedBox[], redacted: Set<string>, scale: number): void {
   ctx.save();
-  ctx.lineWidth = 1 / scale;
-  ctx.strokeStyle = 'rgba(129, 140, 248, 0.55)';
-  ctx.fillStyle = 'rgba(129, 140, 248, 0.08)';
+  ctx.lineCap = 'round';
+  const inset = 1 / scale;
   for (const b of boxes) {
-    const w = b.x1 - b.x0;
-    const h = b.y1 - b.y0;
-    ctx.fillRect(b.x0, b.y0, w, h);
-    ctx.strokeRect(b.x0, b.y0, w, h);
+    const on = redacted.has(b.key);
+    const y = b.y1 + 1.5 / scale;
+    ctx.beginPath();
+    ctx.lineWidth = (on ? 2.4 : 1.6) / scale;
+    ctx.strokeStyle = on ? 'rgba(200, 30, 30, 0.95)' : 'rgba(26, 26, 26, 0.5)';
+    ctx.moveTo(b.x0 + inset, y);
+    ctx.lineTo(b.x1 - inset, y);
+    ctx.stroke();
   }
   ctx.restore();
 }
@@ -258,12 +293,12 @@ function drawSelectionBoxes(
   if (rect && (Math.abs(rect.w) > 2 || Math.abs(rect.h) > 2)) {
     ctx.setLineDash([5 / scale, 4 / scale]);
     ctx.lineWidth = 1.2 / scale;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.strokeStyle = 'rgba(26, 26, 26, 0.65)';
     ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
     ctx.setLineDash([]);
   }
-  ctx.fillStyle = 'rgba(244, 63, 94, 0.30)';
-  ctx.strokeStyle = 'rgba(244, 63, 94, 0.9)';
+  ctx.fillStyle = 'rgba(200, 30, 30, 0.28)';
+  ctx.strokeStyle = 'rgba(200, 30, 30, 0.9)';
   ctx.lineWidth = 1.4 / scale;
   for (const b of boxes) {
     const w = b.x1 - b.x0;
@@ -340,8 +375,9 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   const granularityRef = useRef<WordGranularity>('word');
   // Live tap/drag selection preview (image-space boxes highlighted before commit).
   const wordSelStartRef = useRef<Point | null>(null);
-  const wordSelBoxesRef = useRef<OcrBox[]>([]);
+  const wordSelBoxesRef = useRef<KeyedBox[]>([]);
   const wordSelRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const wordDraggedRef = useRef(false); // did the current words gesture actually drag?
 
   // Straight-line / square constrain: Shift on desktop OR this toggle for touch.
   const [constrain, setConstrain] = useState(false);
@@ -457,9 +493,10 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.setTransform(scale, 0, 0, scale, v.ox, v.oy);
     ctx.drawImage(base, 0, 0);
-    // Detected-word hints (faint) whenever the Tap-words tool is active.
+    // Underline affordance for tappable words/letters whenever Tap-text is active.
     if (toolRef.current === 'words' && ocrWordsRef.current.length) {
-      drawDetectedBoxes(ctx, ocrWordsRef.current, scale);
+      const kb = keyedBoxesFor(ocrWordsRef.current, granularityRef.current);
+      drawUnderlines(ctx, kb, redactedKeySet(shapesRef.current), scale);
     }
     // In-progress manual shape + its drawing-time outline affordance.
     if (draftRef.current) {
@@ -824,22 +861,18 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     if (tool === 'words') void ensureOcr();
   }, [tool, ensureOcr]);
 
+  // Redraw the canvas overlays when the tool or granularity changes (so the
+  // underline affordances appear/disappear and switch word<->letter promptly).
+  useEffect(() => { renderDisplay(); }, [tool, granularity, renderDisplay]);
+
   /** Boxes to tap/drag against, per current granularity (word vs letter). */
-  const collectBoxes = useCallback((): OcrBox[] => {
-    const words = ocrWordsRef.current;
-    if (granularityRef.current === 'letter') {
-      const out: OcrBox[] = [];
-      for (const w of words) {
-        if (w.symbols.length) out.push(...w.symbols);
-        else out.push(w); // no symbol boxes -> fall back to the word box
-      }
-      return out;
-    }
-    return words;
+  const collectBoxes = useCallback((): KeyedBox[] => {
+    return keyedBoxesFor(ocrWordsRef.current, granularityRef.current);
   }, []);
 
   const beginWordSelect = useCallback((p: Point) => {
     wordSelStartRef.current = p;
+    wordDraggedRef.current = false;
     wordSelBoxesRef.current = [];
     wordSelRectRef.current = null;
     renderDisplay();
@@ -857,6 +890,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     wordSelRectRef.current = { x: r.x0, y: r.y0, w: r.x1 - r.x0, h: r.y1 - r.y0 };
     const moved = r.x1 - r.x0 > 3 || r.y1 - r.y0 > 3;
     if (moved) {
+      wordDraggedRef.current = true;
       wordSelBoxesRef.current = collectBoxes().filter((b) => boxIntersectsRect(b, r));
     } else {
       const hits = collectBoxes().filter((b) => pointInBox(start, b, 2));
@@ -865,49 +899,82 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     renderDisplay();
   }, [collectBoxes, renderDisplay]);
 
+  /** Build a blend-filled rect redaction from an OCR box, tagged with its key. */
+  const shapeFromBox = useCallback((b: KeyedBox): Shape => {
+    const pad = 2;
+    const shape: Shape = {
+      type: 'rect',
+      x: b.x0 - pad,
+      y: b.y0 - pad,
+      w: b.x1 - b.x0 + pad * 2,
+      h: b.y1 - b.y0 + pad * 2,
+      fill: FALLBACK_FILL,
+      ocrKey: b.key,
+    };
+    shape.fill = computeFill(shape); // blend-sample from the original image
+    return shape;
+  }, [computeFill]);
+
   const commitWordSelection = useCallback(() => {
     const start = wordSelStartRef.current;
+    const dragged = wordDraggedRef.current;
     wordSelStartRef.current = null;
-    let boxes = wordSelBoxesRef.current;
-    // Plain tap that produced no drag-selection: redact the tightest box under it.
-    if (!boxes.length && start) {
-      const hits = collectBoxes().filter((b) => pointInBox(start, b, 2));
-      if (hits.length) boxes = [hits.reduce((a, b) => (boxArea(b) < boxArea(a) ? b : a))];
-    }
+    const selected = wordSelBoxesRef.current;
     wordSelBoxesRef.current = [];
     wordSelRectRef.current = null;
-    if (!boxes.length) { renderDisplay(); return; }
 
-    // Honor the per-round stroke limit: only add up to the remaining budget.
-    let allowed = boxes;
+    // TAP (no drag): TOGGLE the single box under the pointer. If it's already
+    // redacted, reveal it (remove that shape); otherwise hide it.
+    if (!dragged) {
+      let box = selected[0];
+      if (!box && start) {
+        const hits = collectBoxes().filter((b) => pointInBox(start, b, 2));
+        if (hits.length) box = hits.reduce((a, b) => (boxArea(b) < boxArea(a) ? b : a));
+      }
+      if (!box) { renderDisplay(); return; }
+
+      const existingIdx = shapesRef.current.findIndex((s) => s.type === 'rect' && s.ocrKey === box!.key);
+      if (existingIdx >= 0) {
+        // Reveal: drop that specific redaction and re-bake the scene.
+        shapesRef.current = [...shapesRef.current.slice(0, existingIdx), ...shapesRef.current.slice(existingIdx + 1)];
+        setShapeCount(shapesRef.current.length);
+        rebuildBase();
+        renderDisplay();
+        persist();
+        return;
+      }
+      // Hide (respect the per-round stroke limit).
+      if (max != null && shapesRef.current.length >= max) { renderDisplay(); return; }
+      const shape = shapeFromBox(box);
+      shapesRef.current = [...shapesRef.current, shape];
+      setShapeCount(shapesRef.current.length);
+      const ctx = baseRef.current?.getContext('2d');
+      if (ctx) drawShape(ctx, shape);
+      renderDisplay();
+      persist();
+      return;
+    }
+
+    // DRAG across a range: always HIDE the touched boxes not already redacted.
+    if (!selected.length) { renderDisplay(); return; }
+    const already = redactedKeySet(shapesRef.current);
+    let toAdd = selected.filter((b) => !already.has(b.key));
     if (max != null) {
       const room = Math.max(0, max - shapesRef.current.length);
-      allowed = boxes.slice(0, room);
+      toAdd = toAdd.slice(0, room);
     }
-    if (!allowed.length) { renderDisplay(); return; }
-
-    const base = baseRef.current;
-    const ctx = base?.getContext('2d');
-    const pad = 2;
-    const added: Shape[] = [];
-    for (const b of allowed) {
-      const shape: Shape = {
-        type: 'rect',
-        x: b.x0 - pad,
-        y: b.y0 - pad,
-        w: b.x1 - b.x0 + pad * 2,
-        h: b.y1 - b.y0 + pad * 2,
-        fill: FALLBACK_FILL,
-      };
-      shape.fill = computeFill(shape); // blend-sample from the original image
-      added.push(shape);
+    if (!toAdd.length) { renderDisplay(); return; }
+    const ctx = baseRef.current?.getContext('2d');
+    const added = toAdd.map((b) => {
+      const shape = shapeFromBox(b);
       if (ctx) drawShape(ctx, shape);
-    }
+      return shape;
+    });
     shapesRef.current = [...shapesRef.current, ...added];
     setShapeCount(shapesRef.current.length);
     renderDisplay();
     persist();
-  }, [collectBoxes, computeFill, drawShape, max, renderDisplay, persist]);
+  }, [collectBoxes, shapeFromBox, drawShape, rebuildBase, max, renderDisplay, persist]);
 
   const interactive = loaded && !disabled && !submitted;
   const interactiveRef = useRef(interactive);
@@ -1053,53 +1120,60 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         ? 'cell'
         : 'crosshair';
 
+  const wordsStatus =
+    ocrState === 'loading' ? '🔎 Reading the copy…'
+    : ocrState === 'ready' ? `${ocrWordsRef.current.length} words · tap to toggle, drag to hide`
+    : ocrState === 'empty' ? 'No text found — use Box / Brush'
+    : ocrState === 'error' ? 'Reader jammed — use Box / Brush'
+    : '';
+
+  const controlsHint =
+    'Zoom: scroll wheel or pinch\nPan: Space + drag, middle-drag, or two-finger drag\nStraight lines / squares: hold Shift (or the Straight toggle)\nTap-text: tap a word to hide/reveal, drag across to hide a range';
+
   return (
     <div className="flex flex-col gap-3">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg overflow-hidden border border-white/10">
+        <div className="flex rounded-[3px] overflow-hidden border-2 border-ink">
           <ToolButton active={tool === 'rect'} onClick={() => setTool('rect')} disabled={!interactive} label="▭ Box" />
-          <ToolButton active={tool === 'brush'} onClick={() => setTool('brush')} disabled={!interactive} label="✎ Brush" />
+          <ToolButton active={tool === 'brush'} onClick={() => setTool('brush')} disabled={!interactive} label="✎ Marker" />
           <ToolButton active={tool === 'words'} onClick={() => setTool('words')} disabled={!interactive} label="🔤 Tap text" />
           <ToolButton active={tool === 'eraser'} onClick={() => setTool('eraser')} disabled={!interactive} label="⌫ Eraser" />
         </div>
 
-        <label className={`flex items-center gap-2 text-sm px-2 py-1 rounded-lg bg-panel2 ${tool === 'brush' ? 'opacity-100' : 'opacity-40'}`}>
-          <span className="whitespace-nowrap">Thickness</span>
-          <input
-            type="range"
-            min={MIN_THICKNESS}
-            max={MAX_THICKNESS}
-            value={thickness}
-            disabled={!interactive || tool !== 'brush'}
-            onChange={(e) => setThickness(Number(e.target.value))}
-            className="accent-grief w-24 sm:w-32"
-          />
-          <span className="tabular-nums w-6 text-right">{thickness}</span>
-        </label>
+        {tool === 'brush' && (
+          <label className="flex items-center gap-2 text-sm px-2.5 py-1.5 rounded-[3px] card-inset">
+            <span className="whitespace-nowrap kicker text-[10px]">Nib</span>
+            <input
+              type="range"
+              min={MIN_THICKNESS}
+              max={MAX_THICKNESS}
+              value={thickness}
+              disabled={!interactive}
+              onChange={(e) => setThickness(Number(e.target.value))}
+              className="accent-grief w-24 sm:w-28"
+            />
+            <span className="tabular-nums w-6 text-right font-semibold">{thickness}</span>
+          </label>
+        )}
 
         {tool === 'words' && (
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-lg overflow-hidden border border-white/10 text-sm">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex rounded-[3px] overflow-hidden border-2 border-ink text-sm">
               <button
                 type="button"
                 onClick={() => setGranularity('word')}
                 disabled={!interactive}
-                className={`px-2.5 py-2 font-medium transition-colors disabled:opacity-40 ${granularity === 'word' ? 'bg-grief text-white' : 'bg-panel2 text-white/80 hover:bg-white/10'}`}
+                className={`px-2.5 py-1.5 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 ${granularity === 'word' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'}`}
               >Words</button>
               <button
                 type="button"
                 onClick={() => setGranularity('letter')}
                 disabled={!interactive}
-                className={`px-2.5 py-2 font-medium transition-colors disabled:opacity-40 ${granularity === 'letter' ? 'bg-grief text-white' : 'bg-panel2 text-white/80 hover:bg-white/10'}`}
+                className={`px-2.5 py-1.5 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 border-l-2 border-ink ${granularity === 'letter' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'}`}
               >Letters</button>
             </div>
-            <span className="text-xs text-white/50 whitespace-nowrap">
-              {ocrState === 'loading' && '🔎 Detecting text…'}
-              {ocrState === 'ready' && `${ocrWordsRef.current.length} words — tap or drag`}
-              {ocrState === 'empty' && 'No text detected'}
-              {ocrState === 'error' && 'Text detection failed'}
-            </span>
+            <span className="text-xs text-ink2 whitespace-nowrap">{wordsStatus}</span>
           </div>
         )}
 
@@ -1107,11 +1181,9 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
           type="button"
           onClick={() => setConstrain((c) => !c)}
           disabled={!interactive}
-          title="Constrain: perfect squares (Box) / straight lines (Brush). Hold Shift on desktop."
-          className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors disabled:opacity-40 ${
-            constrain
-              ? 'bg-grief/20 border-grief/40 text-white'
-              : 'bg-panel2 border-white/10 text-white/80 hover:bg-white/10'
+          title="Constrain: perfect squares (Box) / straight lines (Marker). Hold Shift on desktop."
+          className={`px-3 py-2 text-sm font-slab font-bold uppercase tracking-wide rounded-[3px] border-2 border-ink transition-colors disabled:opacity-40 ${
+            constrain ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'
           }`}
         >
           📐 Straight
@@ -1120,20 +1192,30 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         <div className="flex-1" />
 
         {/* Zoom controls */}
-        <div className="flex items-center rounded-lg overflow-hidden border border-white/10 text-sm">
-          <button type="button" onClick={() => zoomButton(1 / 1.25)} disabled={!loaded} className="px-2.5 py-2 bg-panel2 text-white/80 hover:bg-white/10 disabled:opacity-40" title="Zoom out">−</button>
-          <button type="button" onClick={resetView} disabled={!loaded} className="px-2 py-2 bg-panel2 text-white/70 hover:bg-white/10 disabled:opacity-40 tabular-nums w-14" title="Reset view">{zoomPct}%</button>
-          <button type="button" onClick={() => zoomButton(1.25)} disabled={!loaded} className="px-2.5 py-2 bg-panel2 text-white/80 hover:bg-white/10 disabled:opacity-40" title="Zoom in">+</button>
+        <div className="flex items-center rounded-[3px] overflow-hidden border-2 border-ink text-sm">
+          <button type="button" onClick={() => zoomButton(1 / 1.25)} disabled={!loaded} className="px-2.5 py-2 bg-papercard text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom out">−</button>
+          <button type="button" onClick={resetView} disabled={!loaded} className="px-2 py-2 bg-papercard text-ink2 hover:bg-paper2 disabled:opacity-40 tabular-nums w-14 border-x-2 border-ink" title="Reset view">{zoomPct}%</button>
+          <button type="button" onClick={() => zoomButton(1.25)} disabled={!loaded} className="px-2.5 py-2 bg-papercard text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom in">+</button>
         </div>
 
-        <button onClick={undo} disabled={!interactive || shapeCount === 0} className="btn-secondary">↶ Undo</button>
-        <button onClick={reset} disabled={!interactive || shapeCount === 0} className="btn-secondary">Reset</button>
+        {/* Subtle controls hint (unobtrusive info affordance) */}
+        <button
+          type="button"
+          title={controlsHint}
+          aria-label="Editor controls help"
+          className="w-8 h-8 grid place-items-center rounded-full border-2 border-ink bg-papercard text-ink font-display font-bold text-sm hover:bg-paper2 transition-colors"
+        >
+          i
+        </button>
+
+        <button onClick={undo} disabled={!interactive || shapeCount === 0} className="btn-secondary !py-2">↶ Undo</button>
+        <button onClick={reset} disabled={!interactive || shapeCount === 0} className="btn-secondary !py-2">Reset</button>
       </div>
 
       {/* Canvas viewport */}
       <div
         ref={containerRef}
-        className="relative w-full rounded-xl overflow-hidden bg-panel2 ring-1 ring-white/10"
+        className="relative w-full rounded-[3px] overflow-hidden bg-paper2 border-2 border-ink"
         style={{ height: '60vh', maxHeight: '640px', touchAction: 'none' }}
       >
         <canvas
@@ -1148,34 +1230,34 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         {/* offscreen committed-scene cache (natural resolution) */}
         <canvas ref={baseRef} className="hidden" />
         {!loaded && (
-          <div className="absolute inset-0 grid place-items-center text-white/60 text-sm">Loading source…</div>
+          <div className="absolute inset-0 grid place-items-center text-ink2 text-sm">Setting the type…</div>
         )}
         {remaining != null && (
-          <div className={`absolute top-2 left-2 pill text-xs ${atLimit ? 'bg-grief/30 text-grief border-grief/50' : 'bg-black/50 text-white/80 border-white/10'}`}>
+          <div className={`absolute top-2 left-2 pill ${atLimit ? 'bg-grief text-paper border-ink' : ''}`}>
             {remaining} redaction{remaining === 1 ? '' : 's'} left
           </div>
         )}
         {submitted && (
-          <div className="absolute inset-0 grid place-items-center bg-black/60 backdrop-blur-sm">
+          <div className="absolute inset-0 grid place-items-center bg-paper/70 backdrop-blur-[1px]">
             <div className="text-center">
-              <div className="text-2xl font-bold text-grief">Submitted ✓</div>
-              <div className="text-white/70 text-sm mt-1">Waiting for the reveal…</div>
+              <div className="stamp text-2xl animate-stamp-in">Submitted</div>
+              <div className="text-ink2 text-sm mt-3 italic">Sent to the desk — awaiting the reveal…</div>
             </div>
           </div>
         )}
       </div>
-      <p className="text-[11px] text-white/40 -mt-1">
-        Pinch or scroll to zoom · two-finger drag (or Space/middle-drag) to pan · {tool === 'eraser' ? 'tap a redaction to remove it' : tool === 'words' ? 'tap a word — or drag across several — to black it out' : 'Shift / 📐 for straight lines & squares'}
+      <p className="text-[11px] text-ink3 -mt-1">
+        Scroll / pinch to zoom · Space or middle-drag to pan · {tool === 'eraser' ? 'tap a redaction to lift it' : tool === 'words' ? 'tap a word to hide/reveal · drag across several to hide' : 'hold Shift (or 📐) for straight lines & squares'}
       </p>
 
       {/* Submit */}
       <div className="flex items-center gap-3">
-        <span className="text-xs text-white/50">
+        <span className="text-xs text-ink3">
           {shapeCount} edit{shapeCount === 1 ? '' : 's'}{max != null ? ` · max ${max}` : ''}
         </span>
         <div className="flex-1" />
         <button onClick={handleSubmit} disabled={!interactive} className="btn-primary">
-          {submitted ? 'Submitted' : 'Submit redaction'}
+          {submitted ? 'Filed ✓' : 'File to the desk →'}
         </button>
       </div>
     </div>
@@ -1187,8 +1269,8 @@ function ToolButton({ active, onClick, disabled, label }: { active: boolean; onC
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-40 ${
-        active ? 'bg-grief text-white shadow-glow-grief' : 'bg-panel2 text-white/80 hover:bg-white/10'
+      className={`px-3 py-2 text-sm font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 border-ink [&:not(:first-child)]:border-l-2 ${
+        active ? 'bg-grief text-paper' : 'bg-papercard text-ink hover:bg-paper2'
       }`}
     >
       {label}
