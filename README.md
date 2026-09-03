@@ -38,6 +38,7 @@ Other useful scripts:
 | --- | --- |
 | `npm run dev` | Client + realtime server together (main dev command) |
 | `npm run build` | Type-check (`tsc -b`) + production build |
+| `npm run start` | Serve the production build and realtime game from one process |
 | `npm run seed` | Regenerate the seed-bank source images (`/public/seed`) |
 | `npm run dev:server` / `npm run dev:client` | Run either half on its own |
 
@@ -49,8 +50,35 @@ Other useful scripts:
 4. One person creates a room; everyone else enters the code (or scans the QR).
 
 The client automatically points its WebSocket at the same hostname it was loaded
-from (`ws://<host>:8787`), so LAN play works with no extra config. If a device
+from (`ws://<host>:8787/ws`), so LAN play works with no extra config. If a device
 can't connect, allow Node through the host's firewall for ports `5173` and `8787`.
+
+### Deploy to Render (free hobby hosting)
+
+The repository is configured for a **single Render Web Service**: it builds the
+Vite client, serves it on Render's assigned `PORT`, and upgrades multiplayer
+connections at `/ws` on the same HTTPS URL. No environment variables are needed.
+
+1. Push this repository to GitHub.
+2. In Render, choose **New → Blueprint** and select the repository. Render reads
+   [`render.yaml`](./render.yaml) and creates the free web service.
+3. Wait for the deploy to finish, open the generated `https://…onrender.com`
+   address, and share it with your friends.
+
+Render's free service sleeps after 15 minutes without HTTP or WebSocket traffic,
+so the first visit after a quiet spell can take roughly a minute to wake it.
+Active games stay awake. The room data and uploaded images are deliberately
+in-memory; a server restart, redeploy, or sleep clears them, while the committed
+seed bank remains available.
+
+To emulate the deployed app locally:
+
+```bash
+npm run build
+npm run start
+```
+
+Then open `http://localhost:8787`.
 
 ---
 
@@ -90,14 +118,14 @@ dozens of edits, and undo is instant.
 
 ## Project status
 
-This repo delivers **Phases 1 & 2** of the MVP. Phases 3 & 4 are intentionally
-stubbed with clear seams.
+This repo delivers **Phases 1–3** of the MVP. Phase 4 has clear seams for
+persistence and permanent sharing.
 
 | Phase | Scope | Status |
 | --- | --- | --- |
 | **1** | Redaction canvas (box + brush, thickness, undo-last-shape, reset, submit → flattened PNG) | ✅ Done |
 | **2** | Lobby + realtime round sync, hand-seeded bank of ~18 source images, full game loop across tabs/devices | ✅ Done |
-| **3** | Per-round **upload** flow + **OCR** (Tesseract.js) word-count → timer scaling | 🔜 Stubbed |
+| **3** | Per-round **upload** flow + **OCR** (Tesseract.js) word-count → timer scaling | ✅ Done (in-memory) |
 | **4** | **Persistent** bank + session/round **history** browsing + **voting/scoring** persistence | 🔜 Voting UI works in-session; persistence stubbed |
 
 ### Confirmed product decisions
@@ -190,8 +218,8 @@ app runs immediately after `npm install`.
 
 - **In-memory only.** Restarting the server clears all rooms, sessions, and the
   grown bank. History browsing (Phase 4) isn't built yet.
-- **No upload flow / no OCR yet** — rounds always pull from the seed bank; timers
-  use mock word counts.
+- **Uploads are temporary.** Uploaded sources and OCR results are available for
+  the current room only; a restart or Render sleep clears them.
 - Submissions are broadcast as PNG data URLs inside the full-state snapshot. Fine
   for a party-sized group; a hosted backend would move images to object storage.
 - Reconnect is best-effort (identity is cached in `localStorage` and the client

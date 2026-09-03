@@ -4,13 +4,19 @@ import type { ConnectionStatus, Transport } from './Transport';
 /**
  * WebSocket transport for the local realtime server.
  *
- * The server host is derived from the page's own hostname so that phones and
- * other computers on the LAN (which load the app from http://<host-ip>:5173)
- * connect back to the same machine's WS server on {@link WS_PORT}.
+ * Development uses the standalone local server on {@link WS_PORT}. Production
+ * uses a same-origin `/ws` endpoint, so Render can serve the game and its
+ * WebSocket upgrade from one HTTPS URL. `VITE_WS_URL` remains an escape hatch
+ * for a future split frontend/backend deployment.
  */
 export function defaultWsUrl(): string {
+  const configured = import.meta.env.VITE_WS_URL?.trim();
+  if (configured) return configured;
+
+  const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.hostname || 'localhost';
-  return `ws://${host}:${WS_PORT}`;
+  if (import.meta.env.DEV) return `${scheme}//${host}:${WS_PORT}/ws`;
+  return `${scheme}//${window.location.host}/ws`;
 }
 
 export class WebSocketTransport implements Transport {

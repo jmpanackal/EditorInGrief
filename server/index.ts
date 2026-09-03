@@ -10,6 +10,10 @@
  *
  * Run standalone: `npm run dev:server`  (or both via `npm run dev`)
  */
+import { createServer, type ServerResponse } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { dirname, extname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { GameStore, GameError } from './gameStore.ts';
 import { WS_PORT, type ClientMessage, type ServerMessage } from '@shared/types.ts';
@@ -19,8 +23,75 @@ interface SocketMeta {
   playerId?: string;
 }
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const distDir = resolve(__dirname, '..', 'dist');
+const port = Number(process.env.PORT) || WS_PORT;
+
+const MIME_TYPES: Record<string, string> = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+};
+
 const store = new GameStore();
-const wss = new WebSocketServer({ port: WS_PORT, host: '0.0.0.0' });
+
+/**
+ * Production uses one public port for both the Vite build and WebSockets.
+ * In development Vite still serves the client on 5173 while this server owns
+ * port 8787, so the exact same process can be used in both environments.
+ */
+const httpServer = createServer(async (req, res) => {
+  const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+
+  if (pathname === '/health') {
+    sendText(res, 200, 'ok');
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    sendText(res, 405, 'Method not allowed');
+    return;
+  }
+
+  // Vite's client-side router is not in use today, but returning index.html for
+  // unknown paths makes future browser routes safe while keeping static assets
+  // (including /seed/*.svg) directly cacheable.
+  const decoded = decodeURIComponent(pathname);
+  const requested = decoded === '/' ? 'index.html' : decoded.replace(/^\/+/, '');
+  const candidate = resolve(distDir, requested);
+  const safeCandidate = candidate === distDir || candidate.startsWith(`${distDir}\\`) || candidate.startsWith(`${distDir}/`);
+  const filePath = safeCandidate ? candidate : join(distDir, 'index.html');
+
+  try {
+    const file = await readFile(filePath);
+    res.writeHead(200, {
+      'Content-Type': MIME_TYPES[extname(filePath)] ?? 'application/octet-stream',
+      'Cache-Control': filePath.startsWith(join(distDir, 'assets')) ? 'public, max-age=31536000, immutable' : 'no-cache',
+    });
+    if (req.method !== 'HEAD') res.end(file);
+    else res.end();
+  } catch {
+    try {
+      const index = await readFile(join(distDir, 'index.html'));
+      res.writeHead(200, { 'Content-Type': MIME_TYPES['.html'], 'Cache-Control': 'no-cache' });
+      if (req.method !== 'HEAD') res.end(index);
+      else res.end();
+    } catch {
+      sendText(res, 503, 'The web client has not been built yet. Run npm run build.');
+    }
+  }
+});
+
+function sendText(res: ServerResponse, status: number, body: string) {
+  res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(body);
+}
+
+const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
 // code -> set of live sockets
 const roomSockets = new Map<string, Set<WebSocket>>();
@@ -158,4 +229,6 @@ function withPlayer(ws: WebSocket, fn: (code: string, playerId: string) => void)
   fn(m.code, m.playerId);
 }
 
-console.log(`[server] Editor in Grief realtime server listening on ws://0.0.0.0:${WS_PORT}`);
+httpServer.listen(port, '0.0.0.0', () => {
+  console.log(`[server] Editor in Grief listening on http://0.0.0.0:${port} (WebSockets: /ws)`);
+});

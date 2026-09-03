@@ -10,6 +10,7 @@
     "dev:server": "tsx watch --tsconfig tsconfig.node.json server/index.ts",
     "dev:client": "vite",
     "build": "tsc -b && vite build",
+    "start": "tsx --tsconfig tsconfig.node.json server/index.ts",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit"
   },
