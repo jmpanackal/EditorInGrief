@@ -9,26 +9,74 @@
   body {
     @apply bg-ink text-white/90 font-sans antialiased;
     -webkit-tap-highlight-color: transparent;
+    /* Playful ambient wash — subtle brand color pooling in the corners. */
+    background-image:
+      radial-gradient(60rem 60rem at 110% -10%, rgba(99, 102, 241, 0.10), transparent 60%),
+      radial-gradient(50rem 50rem at -10% 110%, rgba(244, 63, 94, 0.10), transparent 60%);
+    background-attachment: fixed;
+  }
+  h1, h2, h3 {
+    @apply font-display;
+  }
+  /* Roomier, friendlier form controls by default. */
+  ::selection {
+    background: rgba(244, 63, 94, 0.35);
   }
 }
 
 @layer components {
+  /* --- Buttons ---------------------------------------------------------- */
   .btn-primary {
-    @apply px-4 py-2 rounded-lg bg-grief text-white font-semibold shadow-lg shadow-grief/20
-           hover:bg-griefdim active:scale-[0.98] transition disabled:opacity-40 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-grief text-white font-semibold
+           shadow-glow-grief hover:bg-grieflite active:translate-y-px transition
+           disabled:opacity-40 disabled:pointer-events-none;
   }
   .btn-secondary {
-    @apply px-3 py-2 rounded-lg bg-panel2 text-white/85 font-medium border border-white/10
-           hover:bg-white/10 active:scale-[0.98] transition disabled:opacity-40 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-panel3 text-white/90 font-semibold
+           border border-white/10 hover:bg-white/10 active:translate-y-px transition
+           disabled:opacity-40 disabled:pointer-events-none;
   }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-white/70 font-medium
+           hover:bg-white/10 hover:text-white active:translate-y-px transition
+           disabled:opacity-40 disabled:pointer-events-none;
+  }
+  .btn-blurple {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blurple text-white font-semibold
+           shadow-glow-blurple hover:bg-blurpledim active:translate-y-px transition
+           disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  /* --- Surfaces --------------------------------------------------------- */
   .card {
-    @apply bg-panel rounded-2xl border border-white/10 shadow-xl;
+    @apply bg-panel/90 rounded-3xl border border-white/10 shadow-card backdrop-blur-sm;
   }
+  .card-inset {
+    @apply bg-panel2/70 rounded-2xl border border-white/10;
+  }
+
+  /* --- Inputs ----------------------------------------------------------- */
   .field {
     @apply w-full px-4 py-3 rounded-xl bg-panel2 border border-white/10 text-white placeholder-white/40
-           focus:outline-none focus:ring-2 focus:ring-grief/60;
+           focus:outline-none focus:ring-2 focus:ring-grief/60 focus:border-grief/40 transition;
   }
+
+  /* --- Chips / badges --------------------------------------------------- */
   .pill {
-    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-panel2 border border-white/10;
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-panel2 border border-white/10 text-white/80;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-white/5 border border-white/10 text-white/60;
+  }
+
+  /* --- Segmented control ----------------------------------------------- */
+  .segmented {
+    @apply inline-flex rounded-xl bg-panel2 border border-white/10 p-1 gap-1;
+  }
+  .segmented-item {
+    @apply px-3 py-1.5 rounded-lg text-sm font-semibold text-white/70 transition cursor-pointer;
+  }
+  .segmented-item[data-active='true'] {
+    @apply bg-grief text-white shadow-glow-grief;
   }
 }

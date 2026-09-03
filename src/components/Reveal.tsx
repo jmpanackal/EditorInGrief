@@ -17,32 +17,34 @@ export function Reveal({ room }: { room: RoomApi }) {
 
   if (subs.length === 0) {
     return (
-      <div className="card p-8 text-center">
-        <div className="text-xl font-bold">No submissions this round 😶</div>
+      <div className="card p-10 text-center animate-fade-up">
+        <div className="text-5xl mb-3">😶</div>
+        <div className="font-display text-xl font-bold">No submissions this round</div>
         <p className="text-white/60 mt-2">Nobody blacked anything out in time.</p>
         {room.isHost && (
-          <button className="btn-primary mt-4" onClick={room.showScoreboard}>Continue →</button>
+          <button className="btn-primary mt-5" onClick={room.showScoreboard}>Continue →</button>
         )}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 animate-fade-up">
       <div className="card p-4 flex items-center justify-between gap-3">
         <div>
-          <div className="text-xs text-white/50 uppercase tracking-wide">Reveal</div>
-          <div className="text-lg font-bold">{owner?.nickname ?? 'Unknown'}’s redaction</div>
+          <div className="text-xs text-white/45 uppercase tracking-widest font-semibold">🎭 The Reveal</div>
+          <div className="font-display text-xl font-bold">{owner?.nickname ?? 'Unknown'}’s redaction</div>
         </div>
-        <span className="pill">{idx + 1} / {subs.length}</span>
+        <span className="pill bg-blurple/15 text-blurple border-blurple/30">{idx + 1} / {subs.length}</span>
       </div>
 
       <div className="card p-4">
-        <div className="relative w-full flex justify-center rounded-xl overflow-hidden bg-panel2 ring-1 ring-white/10">
+        <div className="relative w-full flex justify-center rounded-2xl overflow-hidden bg-panel2 ring-1 ring-white/10">
           <img
+            key={`${current.id}-${showOriginal}`}
             src={showOriginal ? source.imageUrl : current.editedImageUrl}
             alt={showOriginal ? 'Original source' : 'Redacted submission'}
-            className="max-w-full h-auto"
+            className="max-w-full h-auto animate-pop"
             style={{ maxHeight: '58vh' }}
           />
           {showOriginal && (
@@ -64,13 +66,13 @@ export function Reveal({ room }: { room: RoomApi }) {
 
           {round.votingEnabled && (
             <>
-              <span className="pill">♥ {current.votesCount} vote{current.votesCount === 1 ? '' : 's'}</span>
+              <span className="pill bg-grief/15 text-grieflite border-grief/30">♥ {current.votesCount} vote{current.votesCount === 1 ? '' : 's'}</span>
               {canVote && (
                 <button
                   className={myVote === current.id ? 'btn-primary' : 'btn-secondary'}
                   onClick={() => room.castVote(current.id)}
                 >
-                  {myVote === current.id ? '✓ Your pick' : 'Vote for this'}
+                  {myVote === current.id ? '✓ Your pick' : '♥ Vote for this'}
                 </button>
               )}
               {!canVote && current.playerId === room.playerId && (
@@ -88,7 +90,7 @@ export function Reveal({ room }: { room: RoomApi }) {
           return (
             <div
               key={s.id}
-              className={`relative shrink-0 w-20 rounded-lg overflow-hidden ring-2 ${i === idx ? 'ring-grief' : 'ring-white/10'}`}
+              className={`relative shrink-0 w-20 rounded-xl overflow-hidden ring-2 transition ${i === idx ? 'ring-grief scale-105' : 'ring-white/10 opacity-70 hover:opacity-100'}`}
               title={p?.nickname}
             >
               <img src={s.editedImageUrl} alt="" className="w-full h-16 object-cover object-top" />
@@ -100,7 +102,7 @@ export function Reveal({ room }: { room: RoomApi }) {
         })}
       </div>
 
-      {room.isHost && (
+      {room.isHost ? (
         <div className="flex items-center gap-2">
           <button className="btn-secondary" disabled={idx === 0} onClick={() => room.advanceReveal(-1)}>← Prev</button>
           {isLast ? (
@@ -111,9 +113,8 @@ export function Reveal({ room }: { room: RoomApi }) {
             <button className="btn-primary flex-1" onClick={() => room.advanceReveal(1)}>Next →</button>
           )}
         </div>
-      )}
-      {!room.isHost && (
-        <p className="text-center text-white/50 text-sm">The host is driving the reveal.</p>
+      ) : (
+        <p className="text-center text-white/50 text-sm">🎬 The host is driving the reveal.</p>
       )}
     </div>
   );

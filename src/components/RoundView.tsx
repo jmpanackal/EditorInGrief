@@ -22,19 +22,22 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
     if (!submittedByMe) setFlushToken(Date.now());
   }, [submittedByMe]);
 
+  const isUpload = source.uploadedBy != null;
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="card p-4 flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
+    <div className="flex flex-col gap-4 animate-fade-up">
+      <div className="card p-4 sm:p-5 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <div className="text-xs text-white/50 uppercase tracking-wide flex items-center gap-2">
+            <div className="text-xs text-white/45 uppercase tracking-widest font-semibold flex items-center gap-2">
               Round {state.roundNumber}
-              {round.quickFire && <span className="pill bg-amber-500/20 text-amber-300 border-amber-500/40">⚡ Quick-fire</span>}
+              {round.quickFire && <span className="pill bg-gold/15 text-gold border-gold/40">⚡ Quick-fire</span>}
               {round.maxRedactions != null && <span className="pill">max {round.maxRedactions}</span>}
+              <span className="pill">{isUpload ? '🖼️ uploaded' : '🎲 seed'}</span>
             </div>
-            <div className="text-sm text-white/70">Black out the pixels to make it funnier.</div>
+            <div className="font-display font-semibold text-lg mt-0.5">Black out the pixels to make it funnier.</div>
           </div>
-          <span className="pill">{readyCount}/{connected} submitted</span>
+          <span className="pill bg-blurple/15 text-blurple border-blurple/30">{readyCount}/{connected} submitted</span>
         </div>
         <Countdown
           startedAt={round.startedAt}
@@ -44,7 +47,7 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
         />
       </div>
 
-      <div className="card p-4">
+      <div className="card p-4 sm:p-5">
         <RedactionEditor
           imageUrl={source.imageUrl}
           onSubmit={handleSubmit}
@@ -57,7 +60,7 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
 
       {submittedByMe && (
         <p className="text-center text-white/50 text-sm">
-          Locked in. The reveal begins when everyone submits or the timer runs out.
+          🔒 Locked in. The reveal begins when everyone submits or the timer runs out.
         </p>
       )}
     </div>

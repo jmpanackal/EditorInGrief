@@ -29,7 +29,7 @@ export default function App() {
     <div className="min-h-full">
       {inRoom && <Header room={room} />}
 
-      <main className="max-w-3xl mx-auto p-4 sm:p-6">
+      <main className="max-w-5xl mx-auto p-4 sm:p-6">
         {!inRoom ? (
           <JoinScreen room={room} />
         ) : (
@@ -39,17 +39,17 @@ export default function App() {
 
       {/* Connection banner */}
       {inRoom && room.status !== 'open' && (
-        <div className="fixed bottom-3 inset-x-0 flex justify-center pointer-events-none">
-          <div className="pill bg-amber-500/20 text-amber-300 border-amber-500/40">
-            Reconnecting… ({room.status})
+        <div className="fixed bottom-4 inset-x-0 flex justify-center pointer-events-none z-20">
+          <div className="pill bg-gold/15 text-gold border-gold/40 shadow-lg">
+            <span className="w-2 h-2 rounded-full bg-gold animate-pulse" /> Reconnecting… ({room.status})
           </div>
         </div>
       )}
 
       {/* Error toast */}
       {toast && (
-        <div className="fixed top-3 inset-x-0 flex justify-center px-4">
-          <div className="pill bg-grief/20 text-grief border-grief/40 max-w-md text-center">{toast}</div>
+        <div className="fixed top-4 inset-x-0 flex justify-center px-4 z-30 animate-fade-up">
+          <div className="pill bg-grief/20 text-grief border-grief/40 max-w-md text-center shadow-glow-grief">{toast}</div>
         </div>
       )}
     </div>
@@ -74,17 +74,21 @@ function PhaseView({ room, clockOffsetMs }: { room: ReturnType<typeof useRoom>; 
 
 function Header({ room }: { room: ReturnType<typeof useRoom> }) {
   const state = room.state!;
+  const online = state.players.filter((p) => p.connected).length;
   return (
-    <header className="sticky top-0 z-10 bg-ink/80 backdrop-blur border-b border-white/10">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
-        <div className="font-black">
+    <header className="sticky top-0 z-10 bg-ink/75 backdrop-blur-md border-b border-white/10">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+        <div className="font-display font-bold text-lg">
           Editor in <span className="text-grief">Grief</span>
         </div>
-        <span className="pill">Room <b className="tracking-widest ml-1">{state.code}</b></span>
-        {state.votingEnabled && <span className="pill">voting on</span>}
+        <span className="pill">Room <b className="tracking-widest ml-1 text-white">{state.code}</b></span>
+        {state.votingEnabled && <span className="pill hidden sm:inline-flex">🗳️ voting</span>}
         <span className="flex-1" />
-        <span className="text-sm text-white/60 hidden sm:inline">{room.me?.nickname}</span>
-        <button className="btn-secondary text-xs" onClick={room.leave}>Leave</button>
+        <span className="badge hidden sm:inline-flex">
+          <span className="w-1.5 h-1.5 rounded-full bg-mint" /> {online} online
+        </span>
+        <span className="text-sm text-white/70 font-medium hidden sm:inline">{room.me?.nickname}</span>
+        <button className="btn-ghost text-sm !py-1.5 !px-3" onClick={room.leave}>Leave</button>
       </div>
     </header>
   );

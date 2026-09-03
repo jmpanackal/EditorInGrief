@@ -20,21 +20,23 @@ export function JoinScreen({ room }: { room: RoomApi }) {
 
   return (
     <div className="min-h-full grid place-items-center p-5">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-6">
-          <h1 className="text-4xl font-black">
+      <div className="w-full max-w-md animate-fade-up">
+        {/* Hero */}
+        <div className="text-center mb-7">
+          <div className="text-5xl mb-2 animate-floaty">🖍️</div>
+          <h1 className="font-display text-5xl font-bold tracking-tight">
             Editor in <span className="text-grief">Grief</span>
           </h1>
-          <p className="text-white/60 mt-2">
-            Black out a screenshot to make it hilarious. Redact, reveal, repeat.
+          <p className="text-white/60 mt-3 text-[15px]">
+            Black out a screenshot to make it hilarious.<br />Redact, reveal, repeat.
           </p>
         </div>
 
-        <div className="card p-5 flex flex-col gap-4">
+        <div className="card p-6 flex flex-col gap-4">
           <div>
-            <label className="text-sm text-white/60">Your nickname</label>
+            <label className="text-sm font-semibold text-white/70">Your nickname</label>
             <input
-              className="field mt-1"
+              className="field mt-1.5"
               value={nickname}
               maxLength={20}
               placeholder="e.g. RedactionRacoon"
@@ -42,13 +44,16 @@ export function JoinScreen({ room }: { room: RoomApi }) {
             />
           </div>
 
-          <div className="flex rounded-lg overflow-hidden border border-white/10 text-sm">
+          {/* Segmented join/create */}
+          <div className="segmented w-full">
             <button
-              className={`flex-1 py-2 font-medium ${mode === 'join' ? 'bg-grief text-white' : 'bg-panel2 text-white/70'}`}
+              className="segmented-item flex-1"
+              data-active={mode === 'join'}
               onClick={() => setMode('join')}
             >Join a room</button>
             <button
-              className={`flex-1 py-2 font-medium ${mode === 'create' ? 'bg-grief text-white' : 'bg-panel2 text-white/70'}`}
+              className="segmented-item flex-1"
+              data-active={mode === 'create'}
               onClick={() => setMode('create')}
             >Create a room</button>
           </div>
@@ -56,29 +61,30 @@ export function JoinScreen({ room }: { room: RoomApi }) {
           {mode === 'join' ? (
             <>
               <div>
-                <label className="text-sm text-white/60">Room code</label>
+                <label className="text-sm font-semibold text-white/70">Room code</label>
                 <input
-                  className="field mt-1 tracking-[0.3em] uppercase text-center text-xl font-bold"
+                  className="field mt-1.5 tracking-[0.35em] uppercase text-center text-2xl font-bold font-display"
                   value={code}
                   maxLength={6}
                   placeholder="ABCD"
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
                 />
               </div>
-              <button className="btn-primary py-3" disabled={!canJoin || connecting} onClick={() => room.joinRoom(code, nick)}>
-                {connecting ? 'Connecting…' : 'Join room'}
+              <button className="btn-primary py-3.5 text-lg" disabled={!canJoin || connecting} onClick={() => room.joinRoom(code, nick)}>
+                {connecting ? 'Connecting…' : 'Join room →'}
               </button>
             </>
           ) : (
-            <button className="btn-primary py-3" disabled={!canCreate || connecting} onClick={() => room.createRoom(nick)}>
-              {connecting ? 'Connecting…' : 'Create room'}
+            <button className="btn-primary py-3.5 text-lg" disabled={!canCreate || connecting} onClick={() => room.createRoom(nick)}>
+              {connecting ? 'Connecting…' : 'Create room →'}
             </button>
           )}
 
-          <div className="text-center text-xs text-white/40">
-            Status:{' '}
-            <span className={room.status === 'open' ? 'text-emerald-400' : 'text-amber-400'}>{room.status}</span>
-            {' '}· Play over voice chat. Share the code however you like.
+          <div className="flex items-center justify-center gap-2 text-xs text-white/45">
+            <span className={`w-2 h-2 rounded-full ${room.status === 'open' ? 'bg-mint' : 'bg-gold animate-pulse'}`} />
+            <span>{room.status === 'open' ? 'Connected' : room.status}</span>
+            <span className="text-white/25">·</span>
+            <span>Best played over voice chat</span>
           </div>
         </div>
       </div>
