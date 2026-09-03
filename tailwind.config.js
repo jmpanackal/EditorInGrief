@@ -4,35 +4,35 @@ export default {
   theme: {
     extend: {
       colors: {
-        // --- surfaces (Discord-ish comfortable dark, warm-neutral) -------
-        ink: '#0f1116', // app background
-        panel: '#181b22', // primary card surface
-        panel2: '#212530', // inset / secondary surface
-        panel3: '#2b303c', // raised control / hover
-        hair: 'rgba(255,255,255,0.08)', // hairline dividers
-
-        // --- brand + accents --------------------------------------------
-        grief: '#f43f5e', // primary (refined "Grief" rose)
-        griefdim: '#e11d48',
-        grieflite: '#fb7185',
-        blurple: '#6366f1', // secondary playful accent
-        blurpledim: '#4f46e5',
-        accent: '#38bdf8', // info / progress
-        mint: '#34d399', // presence / success
-        gold: '#fbbf24', // winners / quick-fire
+        // --- newsprint paper surfaces ------------------------------------
+        paper: '#f4f1e9', // app background (warm off-white newsprint)
+        paper2: '#e8e2d3', // inset / secondary surface (kraft)
+        paper3: '#ddd5c2', // pressed / hover kraft
+        papercard: '#faf8f1', // clipping / card surface (brighter stock)
+        // --- ink + accent ------------------------------------------------
+        ink: '#1a1a1a', // near-black body ink
+        ink2: '#4a4640', // secondary ink (muted)
+        ink3: '#6b655c', // tertiary / captions
+        grief: '#c81e1e', // stop-press red (primary action / highlight)
+        griefdark: '#9e1515',
+        grieflite: '#e04b3a',
+        gold: '#a9791f', // muted award gold (winner marks on paper)
       },
       fontFamily: {
-        display: ['Fredoka', 'ui-rounded', 'Segoe UI', 'system-ui', 'sans-serif'],
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+        // Masthead + headlines (elegant high-contrast serif).
+        display: ['"Playfair Display"', 'Georgia', 'Times New Roman', 'serif'],
+        // Kickers, labels, buttons, body — sturdy legible slab.
+        slab: ['"Zilla Slab"', 'Rockwell', 'Georgia', 'serif'],
+        sans: ['"Zilla Slab"', 'Rockwell', 'Georgia', 'serif'],
       },
       borderRadius: {
         xl2: '1.125rem',
-        '4xl': '2rem',
       },
       boxShadow: {
-        card: '0 10px 30px -12px rgba(0,0,0,0.55)',
-        'glow-grief': '0 8px 24px -6px rgba(244,63,94,0.45)',
-        'glow-blurple': '0 8px 24px -6px rgba(99,102,241,0.45)',
+        // Print/paste-up feel: crisp offset rather than soft glow.
+        clip: '3px 4px 0 rgba(26,26,26,0.14)',
+        press: '2px 3px 0 rgba(26,26,26,0.85)',
+        'press-red': '2px 3px 0 rgba(158,21,21,0.9)',
       },
       keyframes: {
         pop: {
@@ -43,15 +43,16 @@ export default {
           '0%': { transform: 'translateY(8px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
-        floaty: {
-          '0%,100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-4px)' },
+        'stamp-in': {
+          '0%': { transform: 'rotate(-8deg) scale(1.6)', opacity: '0' },
+          '60%': { transform: 'rotate(-8deg) scale(0.92)', opacity: '1' },
+          '100%': { transform: 'rotate(-8deg) scale(1)', opacity: '1' },
         },
       },
       animation: {
         pop: 'pop 0.18s ease-out',
         'fade-up': 'fade-up 0.28s ease-out',
-        floaty: 'floaty 3s ease-in-out infinite',
+        'stamp-in': 'stamp-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2)',
       },
     },
   },

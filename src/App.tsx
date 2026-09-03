@@ -5,6 +5,7 @@ import { Lobby } from './components/Lobby';
 import { RoundView } from './components/RoundView';
 import { Reveal } from './components/Reveal';
 import { Scoreboard } from './components/Scoreboard';
+import { dateline } from './lib/format';
 
 export default function App() {
   const room = useRoom();
@@ -40,16 +41,16 @@ export default function App() {
       {/* Connection banner */}
       {inRoom && room.status !== 'open' && (
         <div className="fixed bottom-4 inset-x-0 flex justify-center pointer-events-none z-20">
-          <div className="pill bg-gold/15 text-gold border-gold/40 shadow-lg">
-            <span className="w-2 h-2 rounded-full bg-gold animate-pulse" /> Reconnecting… ({room.status})
+          <div className="pill shadow-clip">
+            <span className="w-2 h-2 rounded-full bg-grief animate-pulse" /> Reconnecting… ({room.status})
           </div>
         </div>
       )}
 
-      {/* Error toast */}
+      {/* Error toast — styled as a wire bulletin */}
       {toast && (
         <div className="fixed top-4 inset-x-0 flex justify-center px-4 z-30 animate-fade-up">
-          <div className="pill bg-grief/20 text-grief border-grief/40 max-w-md text-center shadow-glow-grief">{toast}</div>
+          <div className="pill bg-grief text-paper border-ink max-w-md text-center shadow-clip">⚠ {toast}</div>
         </div>
       )}
     </div>
@@ -76,19 +77,28 @@ function Header({ room }: { room: ReturnType<typeof useRoom> }) {
   const state = room.state!;
   const online = state.players.filter((p) => p.connected).length;
   return (
-    <header className="sticky top-0 z-10 bg-ink/75 backdrop-blur-md border-b border-white/10">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
-        <div className="font-display font-bold text-lg">
-          Editor in <span className="text-grief">Grief</span>
+    <header className="sticky top-0 z-10 bg-paper/90 backdrop-blur-sm border-b-[3px] border-double border-ink">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        {/* Top dateline strip */}
+        <div className="flex items-center justify-between py-1 text-[10px] sm:text-[11px] kicker border-b border-ink/25">
+          <span className="hidden sm:inline">The Daily Grief · Late Edition</span>
+          <span className="sm:hidden">The Daily Grief</span>
+          <span>{dateline()}</span>
         </div>
-        <span className="pill">Room <b className="tracking-widest ml-1 text-white">{state.code}</b></span>
-        {state.votingEnabled && <span className="pill hidden sm:inline-flex">🗳️ voting</span>}
-        <span className="flex-1" />
-        <span className="badge hidden sm:inline-flex">
-          <span className="w-1.5 h-1.5 rounded-full bg-mint" /> {online} online
-        </span>
-        <span className="text-sm text-white/70 font-medium hidden sm:inline">{room.me?.nickname}</span>
-        <button className="btn-ghost text-sm !py-1.5 !px-3" onClick={room.leave}>Leave</button>
+        {/* Masthead row */}
+        <div className="flex items-center gap-3 py-2.5">
+          <div className="font-display font-black text-xl sm:text-2xl leading-none tracking-tight">
+            Editor in <span className="text-grief">Grief</span>
+          </div>
+          <span className="pill">No. <b className="tracking-widest ml-1">{state.code}</b></span>
+          {state.votingEnabled && <span className="pill hidden sm:inline-flex">Voting</span>}
+          <span className="flex-1" />
+          <span className="badge hidden sm:inline-flex">
+            <span className="w-1.5 h-1.5 rounded-full bg-grief" /> {online} on the floor
+          </span>
+          <span className="text-sm text-ink2 font-semibold hidden sm:inline">{room.me?.nickname}</span>
+          <button className="btn-ghost text-sm !py-1.5 !px-3" onClick={room.leave}>Leave</button>
+        </div>
       </div>
     </header>
   );

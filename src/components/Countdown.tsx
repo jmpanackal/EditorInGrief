@@ -37,12 +37,13 @@ export function Countdown({ startedAt, durationSeconds, clockOffsetMs, onExpire 
 
   return (
     <div className="flex items-center gap-3 w-full">
-      <div className={`font-display text-3xl font-bold tabular-nums leading-none ${danger ? 'text-grief animate-pulse' : warn ? 'text-gold' : 'text-white'}`}>
+      <span className="kicker text-[10px] hidden sm:inline">Deadline</span>
+      <div className={`font-display text-3xl font-black tabular-nums leading-none ${danger ? 'text-grief animate-pulse' : 'text-ink'}`}>
         {String(Math.floor(secs / 60)).padStart(1, '0')}:{String(secs % 60).padStart(2, '0')}
       </div>
-      <div className="flex-1 h-2.5 rounded-full bg-panel2 overflow-hidden ring-1 ring-white/5">
+      <div className="flex-1 h-3 rounded-[2px] bg-paper2 overflow-hidden border-2 border-ink">
         <div
-          className={`h-full rounded-full transition-[width] duration-200 ease-linear ${danger ? 'bg-grief' : warn ? 'bg-gold' : 'bg-accent'}`}
+          className={`h-full transition-[width] duration-200 ease-linear ${danger ? 'bg-grief' : warn ? 'bg-gold' : 'bg-ink'}`}
           style={{ width: `${pct * 100}%` }}
         />
       </div>

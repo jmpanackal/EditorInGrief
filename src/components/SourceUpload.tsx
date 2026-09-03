@@ -98,28 +98,27 @@ export function SourceUpload({ room }: { room: RoomApi }) {
   }, [busy, handleFile]);
 
   const working = busy !== 'idle';
-  const busyLabel = busy === 'preparing' ? 'Optimizing image…' : busy === 'ocr' ? 'Reading the text…' : '';
+  const busyLabel = busy === 'preparing' ? 'Sizing the plate…' : busy === 'ocr' ? 'Reading the copy…' : '';
 
   // ---- staged upload preview -------------------------------------------
   if (pending) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-panel2/60 p-3 flex flex-col gap-3">
+      <div className="rounded-[3px] border-2 border-ink bg-paper2 p-3 flex flex-col gap-3">
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-lg">🖼️</span>
-          <span className="font-semibold">Custom screenshot ready</span>
+          <span className="kicker text-[11px]">Filed photo</span>
           <span className="flex-1" />
           <span className="badge">by {uploaderName}</span>
         </div>
-        <div className="rounded-xl overflow-hidden ring-1 ring-white/10 bg-ink/40 grid place-items-center">
+        <div className="rounded-[2px] overflow-hidden border-2 border-ink bg-papercard grid place-items-center">
           <img src={pending.imageUrl} alt="Uploaded source preview" className="max-h-52 w-auto object-contain" />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-white/50">
-            {pending.wordCount > 0 ? `~${pending.wordCount} words detected` : 'Text not detected — manual tools still work'}
+          <span className="text-xs text-ink3">
+            {pending.wordCount > 0 ? `~${pending.wordCount} words in the copy` : 'No text read — manual tools still work'}
           </span>
           <span className="flex-1" />
-          <button className="btn-ghost text-sm" onClick={() => room.clearSource()}>Remove</button>
-          <button className="btn-secondary text-sm" onClick={() => inputRef.current?.click()}>Replace</button>
+          <button className="btn-ghost text-sm" onClick={() => room.clearSource()}>Spike it</button>
+          <button className="btn-secondary text-sm !py-1.5" onClick={() => inputRef.current?.click()}>Replace</button>
         </div>
         <input
           ref={inputRef}
@@ -142,28 +141,28 @@ export function SourceUpload({ room }: { room: RoomApi }) {
         onDragOver={(e) => { e.preventDefault(); if (!working) setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
-        className={`w-full rounded-2xl border-2 border-dashed px-4 py-6 text-center transition-colors ${
-          dragOver ? 'border-grief bg-grief/10' : 'border-white/15 bg-panel2/40 hover:border-white/30 hover:bg-panel2/70'
+        className={`w-full rounded-[3px] border-2 border-dashed px-4 py-6 text-center transition-colors ${
+          dragOver ? 'border-grief bg-grief/10' : 'border-ink/40 bg-paper2/50 hover:border-ink hover:bg-paper2'
         } disabled:opacity-60 disabled:cursor-wait`}
       >
         {working ? (
-          <div className="flex flex-col items-center gap-2 text-sm text-white/70">
+          <div className="flex flex-col items-center gap-2 text-sm text-ink2">
             <Spinner />
             <span>{busyLabel}</span>
             {localPreview && (
-              <img src={localPreview} alt="" className="max-h-24 rounded-lg opacity-60" />
+              <img src={localPreview} alt="" className="max-h-24 rounded-[2px] border-2 border-ink opacity-70" />
             )}
           </div>
         ) : (
           <div className="flex flex-col items-center gap-1">
-            <span className="text-2xl">📤</span>
-            <span className="text-sm font-semibold">Upload your own screenshot</span>
-            <span className="text-xs text-white/50">Drag &amp; drop, click to browse, or paste (⌘/Ctrl-V)</span>
-            <span className="text-[11px] text-white/35">PNG · JPEG · WebP — big images are auto-shrunk</span>
+            <span className="text-2xl">🗞️</span>
+            <span className="text-sm font-bold">File your own screenshot</span>
+            <span className="text-xs text-ink3">Drag &amp; drop, click to browse, or paste (⌘/Ctrl-V)</span>
+            <span className="text-[11px] text-ink3/80">PNG · JPEG · WebP — big plates are auto-shrunk</span>
           </div>
         )}
       </button>
-      {error && <p className="text-xs text-grief">{error}</p>}
+      {error && <p className="text-xs text-grief font-semibold">{error}</p>}
       <input
         ref={inputRef}
         type="file"
@@ -177,6 +176,6 @@ export function SourceUpload({ room }: { room: RoomApi }) {
 
 function Spinner() {
   return (
-    <span className="inline-block w-5 h-5 rounded-full border-2 border-white/25 border-t-grief animate-spin" />
+    <span className="inline-block w-5 h-5 rounded-full border-2 border-ink/25 border-t-grief animate-spin" />
   );
 }

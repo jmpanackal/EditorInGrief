@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { RoomApi } from '../state/useRoom';
+import { dateline } from '../lib/format';
 
 export function JoinScreen({ room }: { room: RoomApi }) {
   const [nickname, setNickname] = useState('');
@@ -20,21 +21,34 @@ export function JoinScreen({ room }: { room: RoomApi }) {
 
   return (
     <div className="min-h-full grid place-items-center p-5">
-      <div className="w-full max-w-md animate-fade-up">
-        {/* Hero */}
-        <div className="text-center mb-7">
-          <div className="text-5xl mb-2 animate-floaty">🖍️</div>
-          <h1 className="font-display text-5xl font-bold tracking-tight">
+      <div className="w-full max-w-lg animate-fade-up">
+        {/* Masthead */}
+        <div className="text-center mb-6">
+          <div className="kicker text-[11px] flex items-center justify-center gap-2">
+            <span className="hr-thin flex-1" />
+            <span>Vol. I</span>
+            <span>·</span>
+            <span>Late Edition</span>
+            <span>·</span>
+            <span>One Thin Dime</span>
+            <span className="hr-thin flex-1" />
+          </div>
+          <h1 className="font-display font-black text-5xl sm:text-6xl leading-none my-2 tracking-tight">
             Editor in <span className="text-grief">Grief</span>
           </h1>
-          <p className="text-white/60 mt-3 text-[15px]">
-            Black out a screenshot to make it hilarious.<br />Redact, reveal, repeat.
-          </p>
+          <div className="hr-double my-2" />
+          <p className="kicker text-[11px]">{dateline()} · The Redactionist’s Gazette</p>
         </div>
 
-        <div className="card p-6 flex flex-col gap-4">
+        {/* Lede */}
+        <p className="text-center text-ink2 mb-5 text-[15px] leading-snug">
+          Black out a screenshot to make it hilarious.<br />
+          <span className="italic">Redact, reveal, repeat — extra, extra!</span>
+        </p>
+
+        <div className="card p-6 flex flex-col gap-4 shadow-clip">
           <div>
-            <label className="text-sm font-semibold text-white/70">Your nickname</label>
+            <label className="kicker text-[11px]">Your byline</label>
             <input
               className="field mt-1.5"
               value={nickname}
@@ -46,22 +60,14 @@ export function JoinScreen({ room }: { room: RoomApi }) {
 
           {/* Segmented join/create */}
           <div className="segmented w-full">
-            <button
-              className="segmented-item flex-1"
-              data-active={mode === 'join'}
-              onClick={() => setMode('join')}
-            >Join a room</button>
-            <button
-              className="segmented-item flex-1"
-              data-active={mode === 'create'}
-              onClick={() => setMode('create')}
-            >Create a room</button>
+            <button className="segmented-item flex-1" data-active={mode === 'join'} onClick={() => setMode('join')}>Join a room</button>
+            <button className="segmented-item flex-1" data-active={mode === 'create'} onClick={() => setMode('create')}>Start a press</button>
           </div>
 
           {mode === 'join' ? (
             <>
               <div>
-                <label className="text-sm font-semibold text-white/70">Room code</label>
+                <label className="kicker text-[11px]">Edition no.</label>
                 <input
                   className="field mt-1.5 tracking-[0.35em] uppercase text-center text-2xl font-bold font-display"
                   value={code}
@@ -71,19 +77,19 @@ export function JoinScreen({ room }: { room: RoomApi }) {
                 />
               </div>
               <button className="btn-primary py-3.5 text-lg" disabled={!canJoin || connecting} onClick={() => room.joinRoom(code, nick)}>
-                {connecting ? 'Connecting…' : 'Join room →'}
+                {connecting ? 'Connecting…' : 'Join the newsroom →'}
               </button>
             </>
           ) : (
             <button className="btn-primary py-3.5 text-lg" disabled={!canCreate || connecting} onClick={() => room.createRoom(nick)}>
-              {connecting ? 'Connecting…' : 'Create room →'}
+              {connecting ? 'Connecting…' : 'Roll the presses →'}
             </button>
           )}
 
-          <div className="flex items-center justify-center gap-2 text-xs text-white/45">
-            <span className={`w-2 h-2 rounded-full ${room.status === 'open' ? 'bg-mint' : 'bg-gold animate-pulse'}`} />
-            <span>{room.status === 'open' ? 'Connected' : room.status}</span>
-            <span className="text-white/25">·</span>
+          <div className="flex items-center justify-center gap-2 text-xs text-ink3">
+            <span className={`w-2 h-2 rounded-full ${room.status === 'open' ? 'bg-grief' : 'bg-ink3 animate-pulse'}`} />
+            <span className="uppercase tracking-wide font-semibold">{room.status === 'open' ? 'On the wire' : room.status}</span>
+            <span>·</span>
             <span>Best played over voice chat</span>
           </div>
         </div>

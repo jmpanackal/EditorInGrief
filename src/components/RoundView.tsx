@@ -29,15 +29,15 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
       <div className="card p-4 sm:p-5 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <div className="text-xs text-white/45 uppercase tracking-widest font-semibold flex items-center gap-2">
-              Round {state.roundNumber}
-              {round.quickFire && <span className="pill bg-gold/15 text-gold border-gold/40">⚡ Quick-fire</span>}
+            <div className="kicker text-xs flex items-center gap-2 flex-wrap">
+              Story No. {state.roundNumber}
+              {round.quickFire && <span className="pill">⚡ Quick-fire</span>}
               {round.maxRedactions != null && <span className="pill">max {round.maxRedactions}</span>}
-              <span className="pill">{isUpload ? '🖼️ uploaded' : '🎲 seed'}</span>
+              <span className="pill">{isUpload ? 'Wire upload' : 'Wire photo'}</span>
             </div>
-            <div className="font-display font-semibold text-lg mt-0.5">Black out the pixels to make it funnier.</div>
+            <div className="font-display font-black text-xl mt-1">Black out the story to make it funnier.</div>
           </div>
-          <span className="pill bg-blurple/15 text-blurple border-blurple/30">{readyCount}/{connected} submitted</span>
+          <span className="pill">{readyCount}/{connected} filed</span>
         </div>
         <Countdown
           startedAt={round.startedAt}
@@ -59,8 +59,8 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
       </div>
 
       {submittedByMe && (
-        <p className="text-center text-white/50 text-sm">
-          🔒 Locked in. The reveal begins when everyone submits or the timer runs out.
+        <p className="text-center text-ink2 text-sm italic">
+          Filed to the desk. The reveal runs when everyone submits or the deadline passes.
         </p>
       )}
     </div>

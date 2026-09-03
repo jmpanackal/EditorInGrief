@@ -7,76 +7,97 @@
     height: 100%;
   }
   body {
-    @apply bg-ink text-white/90 font-sans antialiased;
+    @apply bg-paper text-ink font-sans antialiased;
     -webkit-tap-highlight-color: transparent;
-    /* Playful ambient wash — subtle brand color pooling in the corners. */
-    background-image:
-      radial-gradient(60rem 60rem at 110% -10%, rgba(99, 102, 241, 0.10), transparent 60%),
-      radial-gradient(50rem 50rem at -10% 110%, rgba(244, 63, 94, 0.10), transparent 60%);
-    background-attachment: fixed;
+    /* Faint newsprint grain so the paper reads as paper, not flat white. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
   }
   h1, h2, h3 {
     @apply font-display;
   }
-  /* Roomier, friendlier form controls by default. */
   ::selection {
-    background: rgba(244, 63, 94, 0.35);
+    background: rgba(200, 30, 30, 0.28);
   }
 }
 
 @layer components {
-  /* --- Buttons ---------------------------------------------------------- */
+  /* --- Kicker / small caps label --------------------------------------- */
+  .kicker {
+    @apply font-slab uppercase tracking-[0.18em] text-ink3 font-semibold;
+  }
+
+  /* --- Buttons: chunky letterpress feel -------------------------------- */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-grief text-white font-semibold
-           shadow-glow-grief hover:bg-grieflite active:translate-y-px transition
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-[3px] bg-grief text-paper font-slab font-bold uppercase tracking-wide
+           border-2 border-ink shadow-press hover:bg-griefdark active:translate-x-[2px] active:translate-y-[3px] active:shadow-none transition
            disabled:opacity-40 disabled:pointer-events-none;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-panel3 text-white/90 font-semibold
-           border border-white/10 hover:bg-white/10 active:translate-y-px transition
+    @apply inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-[3px] bg-papercard text-ink font-slab font-bold uppercase tracking-wide
+           border-2 border-ink shadow-press hover:bg-paper2 active:translate-x-[2px] active:translate-y-[3px] active:shadow-none transition
            disabled:opacity-40 disabled:pointer-events-none;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-white/70 font-medium
-           hover:bg-white/10 hover:text-white active:translate-y-px transition
-           disabled:opacity-40 disabled:pointer-events-none;
-  }
-  .btn-blurple {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blurple text-white font-semibold
-           shadow-glow-blurple hover:bg-blurpledim active:translate-y-px transition
+    @apply inline-flex items-center justify-center gap-2 px-3 py-2 rounded-[3px] text-ink font-slab font-semibold
+           hover:bg-ink/5 active:translate-y-px transition
            disabled:opacity-40 disabled:pointer-events-none;
   }
 
-  /* --- Surfaces --------------------------------------------------------- */
+  /* --- Surfaces: newspaper clippings ----------------------------------- */
   .card {
-    @apply bg-panel/90 rounded-3xl border border-white/10 shadow-card backdrop-blur-sm;
+    @apply bg-papercard rounded-[4px] border-2 border-ink shadow-clip;
   }
   .card-inset {
-    @apply bg-panel2/70 rounded-2xl border border-white/10;
+    @apply bg-paper2 rounded-[3px] border border-ink/25;
   }
 
   /* --- Inputs ----------------------------------------------------------- */
   .field {
-    @apply w-full px-4 py-3 rounded-xl bg-panel2 border border-white/10 text-white placeholder-white/40
-           focus:outline-none focus:ring-2 focus:ring-grief/60 focus:border-grief/40 transition;
+    @apply w-full px-4 py-3 rounded-[3px] bg-papercard border-2 border-ink text-ink placeholder-ink/35 font-slab
+           focus:outline-none focus:ring-2 focus:ring-grief/50 transition;
   }
 
-  /* --- Chips / badges --------------------------------------------------- */
+  /* --- Tags ------------------------------------------------------------- */
   .pill {
-    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-panel2 border border-white/10 text-white/80;
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[2px] text-xs font-slab font-bold uppercase tracking-wide
+           bg-papercard border border-ink text-ink;
   }
   .badge {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-white/5 border border-white/10 text-white/60;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-[2px] text-[11px] font-slab font-semibold uppercase tracking-wide
+           bg-paper2 border border-ink/40 text-ink2;
   }
 
-  /* --- Segmented control ----------------------------------------------- */
+  /* --- Segmented control ------------------------------------------------ */
   .segmented {
-    @apply inline-flex rounded-xl bg-panel2 border border-white/10 p-1 gap-1;
+    @apply inline-flex rounded-[3px] bg-paper2 border-2 border-ink p-0.5 gap-0.5;
   }
   .segmented-item {
-    @apply px-3 py-1.5 rounded-lg text-sm font-semibold text-white/70 transition cursor-pointer;
+    @apply px-3 py-1.5 rounded-[2px] text-sm font-slab font-bold uppercase tracking-wide text-ink2 transition cursor-pointer;
   }
   .segmented-item[data-active='true'] {
-    @apply bg-grief text-white shadow-glow-grief;
+    @apply bg-ink text-paper;
+  }
+
+  /* --- Hairline rules --------------------------------------------------- */
+  .hr-thin {
+    @apply border-0 border-t border-ink/25;
+  }
+  .hr-double {
+    height: 0;
+    border: 0;
+    border-top: 3px double theme('colors.ink');
+  }
+
+  /* --- Rubber stamp (REDACTED / SUBMITTED / EXTRA) --------------------- */
+  .stamp {
+    @apply inline-block font-slab font-extrabold uppercase tracking-[0.15em] text-grief
+           border-[3px] border-grief rounded-[3px] px-4 py-1.5;
+    transform: rotate(-8deg);
+    opacity: 0.88;
+    box-shadow: inset 0 0 0 2px rgba(200, 30, 30, 0.15);
+  }
+  .stamp-ink {
+    @apply text-ink border-ink;
+    box-shadow: inset 0 0 0 2px rgba(26, 26, 26, 0.12);
   }
 }
