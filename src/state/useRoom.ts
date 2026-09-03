@@ -51,6 +51,7 @@ export interface RoomApi {
   startRound: (sourceId?: string) => void;
   submit: (roundId: string, editedImageUrl: string) => void;
   advanceReveal: (direction?: 1 | -1) => void;
+  forceReveal: () => void;
   castVote: (submissionId: string) => void;
   showScoreboard: () => void;
   returnToLobby: () => void;
@@ -179,6 +180,7 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
   const startRound = useCallback((sourceId?: string) => send({ type: 'startRound', sourceId }), [send]);
   const submit = useCallback((roundId: string, editedImageUrl: string) => send({ type: 'submit', roundId, editedImageUrl }), [send]);
   const advanceReveal = useCallback((direction: 1 | -1 = 1) => send({ type: 'advanceReveal', direction }), [send]);
+  const forceReveal = useCallback(() => send({ type: 'forceReveal' }), [send]);
   const castVote = useCallback((submissionId: string) => send({ type: 'castVote', submissionId }), [send]);
   const showScoreboard = useCallback(() => send({ type: 'nextRound' }), [send]);
   const returnToLobby = useCallback(() => send({ type: 'returnToLobby' }), [send]);
@@ -205,6 +207,7 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
     startRound,
     submit,
     advanceReveal,
+    forceReveal,
     castVote,
     showScoreboard,
     returnToLobby,

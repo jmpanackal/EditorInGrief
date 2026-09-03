@@ -15,7 +15,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   COUNTDOWN_SECONDS,
-  clampNormalTimerSeconds,
+  TIMER_NORMAL_SECONDS,
+  clampCustomTimerSeconds,
   resolveRoundTimerSeconds,
   type Player,
   type Round,
@@ -24,6 +25,7 @@ import {
   type SeedSource,
   type Source,
   type Submission,
+  type TimerMode,
 } from '@shared/types.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -82,9 +84,12 @@ const HOST_GRACE_MS = 30000;
 
 const DEFAULT_ROUND_SETTINGS: RoundSettings = {
   maxRedactions: null,
-  quickFire: false,
-  timerSeconds: null, // null = OCR / word-count auto-scale
+  timerMode: 'normal',
+  customSeconds: TIMER_NORMAL_SECONDS,
+  untimed: false,
 };
+
+const TIMER_MODES: ReadonlySet<TimerMode> = new Set(['quick', 'normal', 'long', 'auto', 'custom']);
 
 export class GameStore {
   private rooms = new Map<string, Room>();
@@ -119,6 +124,7 @@ export class GameStore {
   getState(code: string): RoomState | undefined {
     const room = this.getRoom(code);
     if (!room) return undefined;
+    this.normalizeRoomSettings(room);
     return { ...room.state, serverTime: Date.now() };
   }
 
@@ -243,6 +249,7 @@ export class GameStore {
 
   setRoundSettings(code: string, playerId: string, settings: Partial<RoundSettings>): void {
     const room = this.requireHost(code, playerId);
+    this.normalizeRoomSettings(room);
     const current = room.state.roundSettings;
     const next: RoundSettings = { ...current };
     if ('maxRedactions' in settings) {
@@ -250,12 +257,13 @@ export class GameStore {
       // Clamp to a sane positive range; null/invalid = unlimited.
       next.maxRedactions = v == null || !Number.isFinite(v) || v <= 0 ? null : Math.min(99, Math.floor(v));
     }
-    if ('quickFire' in settings) next.quickFire = !!settings.quickFire;
-    if ('timerSeconds' in settings) {
-      const v = settings.timerSeconds;
-      // null/undefined/invalid = auto (OCR formula); otherwise clamp to normal bounds.
-      next.timerSeconds = v == null || !Number.isFinite(v) ? null : clampNormalTimerSeconds(v);
+    if ('timerMode' in settings && settings.timerMode != null && TIMER_MODES.has(settings.timerMode)) {
+      next.timerMode = settings.timerMode;
     }
+    if ('customSeconds' in settings) {
+      next.customSeconds = clampCustomTimerSeconds(Number(settings.customSeconds));
+    }
+    if ('untimed' in settings) next.untimed = !!settings.untimed;
     room.state.roundSettings = next;
     this.broadcast(room.state.code);
   }
@@ -314,6 +322,7 @@ export class GameStore {
   // -------------------------------------------------------------------------
   startRound(code: string, playerId: string, sourceId?: string): void {
     const room = this.requireHost(code, playerId);
+    this.normalizeRoomSettings(room);
     if (room.state.phase !== 'lobby' && room.state.phase !== 'scoreboard') {
       throw new GameError('You can only start a round from the lobby.');
     }
@@ -335,7 +344,8 @@ export class GameStore {
       countdownStartedAt: now,
       startedAt: now + COUNTDOWN_SECONDS * 1000,
       maxRedactions: settings.maxRedactions,
-      quickFire: settings.quickFire,
+      timerMode: settings.timerMode,
+      untimed: settings.untimed,
       submissions: [],
       revealIndex: 0,
       votingEnabled: room.state.votingEnabled,
@@ -396,6 +406,14 @@ export class GameStore {
     this.broadcast(room.state.code);
   }
 
+  /** Host skips waiting for remaining players (untimed AFK escape hatch). */
+  forceReveal(code: string, playerId: string): void {
+    const room = this.requireHost(code, playerId);
+    if (room.state.phase !== 'round') return;
+    this.toReveal(room);
+    this.broadcast(room.state.code);
+  }
+
   castVote(code: string, playerId: string, submissionId: string): void {
     const room = this.requireRoom(code);
     const round = room.state.currentRound;
@@ -441,7 +459,7 @@ export class GameStore {
   // -------------------------------------------------------------------------
   // Internal transitions
   // -------------------------------------------------------------------------
-  /** Countdown finished → active redaction + authoritative deadline timer. */
+  /** Countdown finished → active redaction (+ authoritative deadline when timed). */
   private beginRedaction(room: Room): void {
     const round = room.state.currentRound;
     if (!round || room.state.phase !== 'countdown') return;
@@ -451,6 +469,9 @@ export class GameStore {
     round.startedAt = Date.now();
 
     this.clearPhaseTimers(room);
+    // Untimed / ready-up: no deadline — reveal when everyone has submitted.
+    if (round.untimed || round.timerSeconds <= 0) return;
+
     room.autoTimer = setTimeout(() => {
       if (room.state.phase === 'round' && room.state.currentRound?.id === round.id) {
         this.toReveal(room);
@@ -518,6 +539,21 @@ export class GameStore {
   // -------------------------------------------------------------------------
   // Guards
   // -------------------------------------------------------------------------
+  /**
+   * Migrate legacy in-memory rooms that still have quickFire / timerSeconds
+   * onto the Round length model so hot-reloads don't break live lobbies.
+   */
+  private normalizeRoomSettings(room: Room): void {
+    room.state.roundSettings = normalizeRoundSettings(room.state.roundSettings as RoundSettings & Record<string, unknown>);
+    const round = room.state.currentRound;
+    if (!round) return;
+    const legacy = round as Round & { quickFire?: boolean };
+    if (legacy.timerMode == null) {
+      legacy.timerMode = legacy.quickFire ? 'quick' : 'normal';
+    }
+    if (legacy.untimed == null) legacy.untimed = false;
+  }
+
   private requireRoom(code: string): Room {
     const room = this.getRoom(code);
     if (!room) throw new GameError(`Room "${code?.toUpperCase?.() ?? code}" not found.`);
@@ -536,4 +572,38 @@ export class GameError extends Error {}
 function cleanNick(nickname: string): string {
   const trimmed = (nickname ?? '').trim().slice(0, 20);
   return trimmed || 'Player';
+}
+
+/** Coerce legacy or partial settings into the current RoundSettings shape. */
+function normalizeRoundSettings(raw: RoundSettings & Record<string, unknown>): RoundSettings {
+  const maxRaw = raw?.maxRedactions;
+  const maxRedactions =
+    maxRaw == null || !Number.isFinite(maxRaw) || (maxRaw as number) <= 0
+      ? null
+      : Math.min(99, Math.floor(maxRaw as number));
+
+  let timerMode: TimerMode = 'normal';
+  if (raw?.timerMode && TIMER_MODES.has(raw.timerMode as TimerMode)) {
+    timerMode = raw.timerMode as TimerMode;
+  } else if (raw && 'quickFire' in raw && raw.quickFire) {
+    timerMode = 'quick';
+  } else if (raw && 'timerSeconds' in raw) {
+    const ts = raw.timerSeconds as number | null | undefined;
+    if (ts == null) timerMode = 'auto';
+    else if (ts === 30 || ts === 25) timerMode = 'quick';
+    else if (ts === 120) timerMode = 'normal';
+    else if (ts === 300) timerMode = 'long';
+    else timerMode = 'custom';
+  }
+
+  let customSeconds = TIMER_NORMAL_SECONDS;
+  if (typeof raw?.customSeconds === 'number' && Number.isFinite(raw.customSeconds)) {
+    customSeconds = clampCustomTimerSeconds(raw.customSeconds);
+  } else if (typeof raw?.timerSeconds === 'number' && Number.isFinite(raw.timerSeconds)) {
+    customSeconds = clampCustomTimerSeconds(raw.timerSeconds as number);
+  }
+
+  const untimed = !!(raw && 'untimed' in raw ? raw.untimed : false);
+
+  return { maxRedactions, timerMode, customSeconds, untimed };
 }

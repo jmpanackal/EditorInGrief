@@ -33,6 +33,9 @@ export interface Submission {
   votesCount: number;
 }
 
+/** Host-facing round-length presets (lobby "Round length" control). */
+export type TimerMode = 'quick' | 'normal' | 'long' | 'auto' | 'custom';
+
 /** A single round within a session. */
 export interface Round {
   id: string;
@@ -52,7 +55,13 @@ export interface Round {
   startedAt: number;
   // Round-mode config, snapshotted from the room settings at start (Batch 2):
   maxRedactions: number | null; // null = unlimited; otherwise cap on shapes/round
-  quickFire: boolean; // true = short fixed timer for fast pacing
+  /** Length preset snapshotted at start (for badges / copy). */
+  timerMode: TimerMode;
+  /**
+   * True when the round has no deadline — advance when every connected player
+   * has submitted. `timerSeconds` is 0 in this mode.
+   */
+  untimed: boolean;
   // Runtime-only fields (still safe to persist):
   submissions: Submission[];
   revealIndex: number; // which submission is currently shown at reveal
@@ -68,14 +77,21 @@ export interface Round {
 export interface RoundSettings {
   /** Max redactions a player may draw per round. null = unlimited (default/off). */
   maxRedactions: number | null;
-  /** Quick-fire mode: a short fixed timer overriding the word-count formula. */
-  quickFire: boolean;
   /**
-   * Host override for normal-round duration (seconds). null = auto-scale from
-   * word count / OCR via {@link computeTimerSeconds}. Ignored when quickFire
-   * is on (fixed {@link QUICKFIRE_SECONDS} applies instead).
+   * Round length preset. Ignored when {@link untimed} is on.
+   * Default: `'normal'` (2 minutes).
    */
-  timerSeconds: number | null;
+  timerMode: TimerMode;
+  /**
+   * Duration when {@link timerMode} is `'custom'` (seconds). Clamped to
+   * {@link CUSTOM_TIMER_MIN}–{@link CUSTOM_TIMER_MAX}.
+   */
+  customSeconds: number;
+  /**
+   * No countdown deadline — round ends when every connected player has
+   * submitted (filed). Round length presets do not apply while this is on.
+   */
+  untimed: boolean;
 }
 
 /** A player in a session. */
@@ -176,6 +192,7 @@ export type ClientMessage =
   | { type: 'startRound'; sourceId?: string } // host only; sourceId optional (else random from bank)
   | { type: 'submit'; roundId: string; editedImageUrl: string }
   | { type: 'advanceReveal'; direction?: 1 | -1 } // host only
+  | { type: 'forceReveal' } // host only; skip waiting (e.g. AFK during untimed)
   | { type: 'castVote'; submissionId: string } // when voting enabled
   | { type: 'nextRound' } // host only; reveal/scoreboard -> lobby-ish round setup
   | { type: 'returnToLobby' }; // host only
@@ -191,48 +208,92 @@ export type ServerMessage =
 // ---------------------------------------------------------------------------
 
 /**
- * Round timer formula (normal / non quick-fire rounds, when the host has not
- * set an explicit duration).
+ * Auto round-length formula (when {@link TimerMode} is `'auto'`).
  *
  *   timer_seconds = clamp(60 + 0.5 * word_count, 60, 210)
  *
- * The floor is a hard 60s minimum so normal rounds never feel rushed; longer
- * sources scale up to a generous 3.5 minute ceiling. word_count only affects
- * pacing; a rough estimate (OCR or seed metadata) is fine. Quick-fire mode
- * and host overrides bypass this (see {@link resolveRoundTimerSeconds}).
+ * Floor 60s so Auto never feels rushed; ceiling ~3.5 minutes. word_count is a
+ * rough estimate from the image (seed metadata or client text-read at upload).
+ * Fixed presets and Custom bypass this (see {@link resolveRoundTimerSeconds}).
  */
 export function computeTimerSeconds(wordCount: number): number {
   const raw = 60 + 0.5 * wordCount;
-  return Math.round(Math.min(210, Math.max(NORMAL_TIMER_MIN, raw)));
+  return Math.round(Math.min(210, Math.max(AUTO_TIMER_MIN, raw)));
 }
 
-/** Fixed timer (seconds) for quick-fire rounds — overrides host + OCR formula. */
-export const QUICKFIRE_SECONDS = 25;
+/** Fixed preset durations (seconds). */
+export const TIMER_QUICK_SECONDS = 30;
+export const TIMER_NORMAL_SECONDS = 120;
+export const TIMER_LONG_SECONDS = 300;
+
+/** Auto formula floor / ceiling (seconds). */
+export const AUTO_TIMER_MIN = 60;
+export const AUTO_TIMER_MAX = 210;
+
+/** Custom time-picker bounds (seconds). */
+export const CUSTOM_TIMER_MIN = 30;
+export const CUSTOM_TIMER_MAX = 600;
+
+/** @deprecated Use TIMER_QUICK_SECONDS. Kept so older imports don't break mid-refactor. */
+export const QUICKFIRE_SECONDS = TIMER_QUICK_SECONDS;
+/** @deprecated Use AUTO_TIMER_MIN. */
+export const NORMAL_TIMER_MIN = AUTO_TIMER_MIN;
+/** @deprecated Use TIMER_LONG_SECONDS / CUSTOM_TIMER_MAX as appropriate. */
+export const NORMAL_TIMER_MAX = TIMER_LONG_SECONDS;
 
 /** Synced pre-round countdown length (3 → 2 → 1 → GO, one second each). */
 export const COUNTDOWN_SECONDS = 4;
 
-/** Host-settable normal-round timer bounds (seconds). */
-export const NORMAL_TIMER_MIN = 60;
-export const NORMAL_TIMER_MAX = 300;
+/** Clamp a host-chosen custom duration into sane bounds. */
+export function clampCustomTimerSeconds(seconds: number): number {
+  if (!Number.isFinite(seconds)) return TIMER_NORMAL_SECONDS;
+  return Math.min(CUSTOM_TIMER_MAX, Math.max(CUSTOM_TIMER_MIN, Math.round(seconds)));
+}
 
-/** Clamp a host-chosen normal-round duration into sane bounds. */
+/** @deprecated Use {@link clampCustomTimerSeconds}. */
 export function clampNormalTimerSeconds(seconds: number): number {
-  if (!Number.isFinite(seconds)) return NORMAL_TIMER_MIN;
-  return Math.min(NORMAL_TIMER_MAX, Math.max(NORMAL_TIMER_MIN, Math.round(seconds)));
+  return clampCustomTimerSeconds(seconds);
 }
 
 /**
- * Resolve the timer that will be snapshotted onto the next round:
- * quick-fire → fixed short timer; else host override if set; else OCR formula.
+ * Resolve the timer that will be snapshotted onto the next round.
+ * Untimed rounds return 0 (no deadline). Otherwise: Quick / Normal / Long /
+ * Custom presets, or Auto from word count.
  */
 export function resolveRoundTimerSeconds(
-  settings: Pick<RoundSettings, 'quickFire' | 'timerSeconds'>,
+  settings: Pick<RoundSettings, 'timerMode' | 'customSeconds' | 'untimed'>,
   wordCount: number,
 ): number {
-  if (settings.quickFire) return QUICKFIRE_SECONDS;
-  if (settings.timerSeconds != null) return clampNormalTimerSeconds(settings.timerSeconds);
-  return computeTimerSeconds(wordCount);
+  if (settings.untimed) return 0;
+  switch (settings.timerMode) {
+    case 'quick':
+      return TIMER_QUICK_SECONDS;
+    case 'normal':
+      return TIMER_NORMAL_SECONDS;
+    case 'long':
+      return TIMER_LONG_SECONDS;
+    case 'custom':
+      return clampCustomTimerSeconds(settings.customSeconds);
+    case 'auto':
+    default:
+      return computeTimerSeconds(wordCount);
+  }
+}
+
+/** Human label for a timer mode (lobby / round badges). */
+export function timerModeLabel(mode: TimerMode): string {
+  switch (mode) {
+    case 'quick':
+      return 'Quick';
+    case 'normal':
+      return 'Normal';
+    case 'long':
+      return 'Long';
+    case 'auto':
+      return 'Auto';
+    case 'custom':
+      return 'Custom';
+  }
 }
 
 export const WS_PORT = 8787;

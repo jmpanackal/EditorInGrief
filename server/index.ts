@@ -128,6 +128,9 @@ function handle(ws: WebSocket, msg: ClientMessage) {
     case 'advanceReveal':
       withPlayer(ws, (code, pid) => store.advanceReveal(code, pid, msg.direction ?? 1));
       break;
+    case 'forceReveal':
+      withPlayer(ws, (code, pid) => store.forceReveal(code, pid));
+      break;
     case 'castVote':
       withPlayer(ws, (code, pid) => store.castVote(code, pid, msg.submissionId));
       break;

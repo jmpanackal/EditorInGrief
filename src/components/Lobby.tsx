@@ -1,18 +1,29 @@
 import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
-  NORMAL_TIMER_MAX,
-  NORMAL_TIMER_MIN,
-  QUICKFIRE_SECONDS,
+  CUSTOM_TIMER_MAX,
+  CUSTOM_TIMER_MIN,
+  TIMER_LONG_SECONDS,
+  TIMER_NORMAL_SECONDS,
+  TIMER_QUICK_SECONDS,
   computeTimerSeconds,
+  resolveRoundTimerSeconds,
+  timerModeLabel,
   type RoundSettings,
+  type TimerMode,
 } from '@shared/types';
 import type { RoomApi } from '../state/useRoom';
 import { PlayerList } from './PlayerList';
 import { SourceUpload } from './SourceUpload';
 import { Toggle } from './ui/Toggle';
 
-const TIMER_PRESETS = [60, 90, 120, 180] as const;
+const LENGTH_OPTIONS: { mode: TimerMode; label: string; sub: string }[] = [
+  { mode: 'quick', label: 'Quick', sub: formatSecs(TIMER_QUICK_SECONDS) },
+  { mode: 'normal', label: 'Normal', sub: formatSecs(TIMER_NORMAL_SECONDS) },
+  { mode: 'long', label: 'Long', sub: formatSecs(TIMER_LONG_SECONDS) },
+  { mode: 'auto', label: 'Auto', sub: 'by text' },
+  { mode: 'custom', label: 'Custom', sub: 'pick' },
+];
 
 export function Lobby({ room }: { room: RoomApi }) {
   const state = room.state!;
@@ -34,14 +45,14 @@ export function Lobby({ room }: { room: RoomApi }) {
     room.setRoundSettings({ maxRedactions: v > 0 ? v : null });
   };
 
-  const setTimer = (partial: Partial<RoundSettings>) => room.setRoundSettings(partial);
+  const setSettings = (partial: Partial<RoundSettings>) => room.setRoundSettings(partial);
 
+  const wordCount = state.pendingSource?.wordCount ?? 0;
   const autoEstimate = state.pendingSource
     ? computeTimerSeconds(state.pendingSource.wordCount)
     : null;
-  const timerLocked = settings.quickFire;
-  const usingAuto = settings.timerSeconds == null;
-  const effectiveNormal = settings.timerSeconds ?? autoEstimate ?? NORMAL_TIMER_MIN;
+  const resolvedPreview = resolveRoundTimerSeconds(settings, wordCount);
+  const lengthDisabled = settings.untimed;
 
   return (
     <div className="grid gap-5 md:grid-cols-[1fr_320px] animate-fade-up">
@@ -86,93 +97,63 @@ export function Lobby({ room }: { room: RoomApi }) {
           <div className="card p-5 flex flex-col gap-4">
             <div className="kicker text-xs">Editor’s desk</div>
 
-            {/* Voting */}
             <SettingRow
               title="Enable voting"
               hint="Off by default — just for laughs"
               control={<Toggle checked={state.votingEnabled} onChange={room.setVoting} aria-label="Enable voting" />}
             />
-            {/* Quick-fire */}
+
             <SettingRow
-              title="⚡ Quick-fire"
-              hint={`Uses a fixed ${QUICKFIRE_SECONDS}s deadline (custom timer ignored)`}
+              title="No time limit"
+              hint="Finish when everyone has filed — no countdown"
               control={
                 <Toggle
-                  checked={settings.quickFire}
-                  onChange={(v) => setTimer({ quickFire: v })}
-                  aria-label="Quick-fire mode"
+                  checked={settings.untimed}
+                  onChange={(v) => setSettings({ untimed: v })}
+                  aria-label="No time limit"
                 />
               }
             />
-            {/* Round timer */}
-            <div className={`px-3.5 py-3 rounded-[3px] card-inset flex flex-col gap-3 ${timerLocked ? 'opacity-55' : ''}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-bold">Round timer</div>
-                  <div className="text-xs text-ink3">
-                    {timerLocked
-                      ? `Quick-fire locks this to ${QUICKFIRE_SECONDS}s.`
-                      : usingAuto
-                        ? autoEstimate != null
-                          ? `Auto from word count → ~${formatSecs(autoEstimate)} (host override wins if set).`
-                          : 'Auto from word count / OCR (min 60s). Set a custom time to override.'
-                        : `Custom ${formatSecs(settings.timerSeconds!)} — overrides OCR auto-scale.`}
-                  </div>
+
+            {/* Round length */}
+            <div className={`px-3.5 py-3 rounded-[3px] card-inset flex flex-col gap-3 ${lengthDisabled ? 'opacity-55' : ''}`}>
+              <div className="min-w-0">
+                <div className="text-sm font-bold">Round length</div>
+                <div className="text-xs text-ink3">
+                  {lengthDisabled
+                    ? 'Doesn’t apply while there’s no time limit.'
+                    : settings.timerMode === 'auto'
+                      ? autoEstimate != null
+                        ? `Scales with how much text is in the image — about ${formatSecs(autoEstimate)} for this source.`
+                        : 'Scales with how much text is in the image (usually about 1–3½ minutes).'
+                      : settings.timerMode === 'custom'
+                        ? `Host-picked deadline: ${formatSecs(settings.customSeconds)}.`
+                        : `${timerModeLabel(settings.timerMode)} — ${formatSecs(resolvedPreview)} per round.`}
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  className="segmented-item"
-                  data-active={String(usingAuto && !timerLocked)}
-                  disabled={timerLocked}
-                  onClick={() => setTimer({ timerSeconds: null })}
-                >
-                  Auto
-                </button>
-                {TIMER_PRESETS.map((s) => (
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Round length">
+                {LENGTH_OPTIONS.map(({ mode, label, sub }) => (
                   <button
-                    key={s}
+                    key={mode}
                     type="button"
-                    className="segmented-item"
-                    data-active={String(!usingAuto && settings.timerSeconds === s && !timerLocked)}
-                    disabled={timerLocked}
-                    onClick={() => setTimer({ timerSeconds: s })}
+                    className="segmented-item !px-2.5 flex flex-col items-center leading-tight gap-0.5"
+                    data-active={String(settings.timerMode === mode && !lengthDisabled)}
+                    disabled={lengthDisabled}
+                    onClick={() => setSettings({ timerMode: mode })}
                   >
-                    {formatSecs(s)}
+                    <span>{label}</span>
+                    <span className="text-[10px] font-semibold normal-case tracking-normal opacity-80">{sub}</span>
                   </button>
                 ))}
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
-                <label className="kicker text-[10px]" htmlFor="timer-custom">Custom</label>
-                <div className="flex items-center gap-1">
-                  <input
-                    id="timer-custom"
-                    type="number"
-                    min={NORMAL_TIMER_MIN}
-                    max={NORMAL_TIMER_MAX}
-                    step={15}
-                    disabled={timerLocked}
-                    className="field !py-1.5 !px-2 w-20 text-center tabular-nums"
-                    value={usingAuto ? '' : settings.timerSeconds ?? ''}
-                    placeholder={String(effectiveNormal)}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      if (raw === '') {
-                        setTimer({ timerSeconds: null });
-                        return;
-                      }
-                      const n = Number(raw);
-                      if (!Number.isFinite(n)) return;
-                      setTimer({ timerSeconds: n });
-                    }}
-                    aria-label="Custom round timer in seconds"
-                  />
-                  <span className="text-xs text-ink3">sec ({NORMAL_TIMER_MIN}–{NORMAL_TIMER_MAX})</span>
-                </div>
-              </div>
+              {settings.timerMode === 'custom' && !lengthDisabled && (
+                <CustomTimePicker
+                  seconds={settings.customSeconds}
+                  onChange={(secs) => setSettings({ customSeconds: secs })}
+                />
+              )}
             </div>
 
             {/* Redaction limit stepper */}
@@ -198,12 +179,13 @@ export function Lobby({ room }: { room: RoomApi }) {
             <div className="font-display font-bold text-lg mt-1">Awaiting the Editor…</div>
             <p className="text-sm text-ink2">They’re setting the next story. You can still file a screenshot above!</p>
             <div className="flex items-center justify-center gap-2 text-xs mt-1 flex-wrap">
-              {settings.quickFire && <span className="pill">⚡ Quick-fire · {QUICKFIRE_SECONDS}s</span>}
-              {!settings.quickFire && settings.timerSeconds != null && (
-                <span className="pill">{formatSecs(settings.timerSeconds)} deadline</span>
-              )}
-              {!settings.quickFire && settings.timerSeconds == null && (
-                <span className="pill">Auto timer</span>
+              {settings.untimed ? (
+                <span className="pill">No time limit</span>
+              ) : (
+                <span className="pill">
+                  {timerModeLabel(settings.timerMode)}
+                  {settings.timerMode !== 'auto' ? ` · ${formatSecs(resolvedPreview)}` : ''}
+                </span>
               )}
               {settings.maxRedactions != null && <span className="pill">max {settings.maxRedactions} edits</span>}
               {state.votingEnabled && <span className="pill">Voting on</span>}
@@ -221,6 +203,60 @@ export function Lobby({ room }: { room: RoomApi }) {
         <PlayerList players={state.players} meId={room.playerId} />
         <p className="text-xs text-ink3 mt-3 italic">Any staffer may file a screenshot for the next edition.</p>
       </div>
+    </div>
+  );
+}
+
+function CustomTimePicker({
+  seconds,
+  onChange,
+}: {
+  seconds: number;
+  onChange: (secs: number) => void;
+}) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+
+  const commit = (m: number, s: number) => {
+    const total = Math.max(CUSTOM_TIMER_MIN, Math.min(CUSTOM_TIMER_MAX, m * 60 + s));
+    onChange(total);
+  };
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="kicker text-[10px]">Time</span>
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          min={0}
+          max={Math.floor(CUSTOM_TIMER_MAX / 60)}
+          className="field !py-1.5 !px-2 w-14 text-center tabular-nums"
+          value={mins}
+          aria-label="Minutes"
+          onChange={(e) => {
+            const m = Math.max(0, Math.min(10, Math.floor(Number(e.target.value) || 0)));
+            commit(m, secs);
+          }}
+        />
+        <span className="font-display font-bold text-lg">:</span>
+        <input
+          type="number"
+          min={0}
+          max={59}
+          step={5}
+          className="field !py-1.5 !px-2 w-14 text-center tabular-nums"
+          value={secs}
+          aria-label="Seconds"
+          onChange={(e) => {
+            const raw = Math.floor(Number(e.target.value) || 0);
+            const s = Math.max(0, Math.min(59, raw));
+            commit(mins, s);
+          }}
+        />
+      </div>
+      <span className="text-xs text-ink3">
+        ({formatSecs(CUSTOM_TIMER_MIN)}–{formatSecs(CUSTOM_TIMER_MAX)})
+      </span>
     </div>
   );
 }
