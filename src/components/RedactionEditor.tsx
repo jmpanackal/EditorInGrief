@@ -17,6 +17,8 @@ import { runOcr, type OcrBox, type OcrWord } from '../lib/ocr';
  *   the flattened PNG export operate in image space. A separate VIEW TRANSFORM
  *   (scale + offset) maps image space onto the on-screen display canvas so the
  *   user can pinch/wheel-zoom and pan without ever changing stored geometry.
+ *   Default scale is fit-to-width (readable body text; tall images pan vertically),
+ *   not contain-entire-image — see computeFit.
  * - Undo removes the LAST SHAPE; the Eraser tool removes a SPECIFIC shape the
  *   user taps (leaving later shapes intact); Reset clears all.
  * - Performance: committed shapes are baked onto an offscreen "base" canvas at
@@ -326,8 +328,24 @@ interface Props {
 
 const MIN_THICKNESS = 6;
 const MAX_THICKNESS = 90;
-const MIN_ZOOM = 1;
+/** Allow zooming out below the default fit-width view to survey the whole page. */
+const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
+/**
+ * Default view is fit-to-width (not contain-entire-image). A slight pad keeps
+ * the image from kissing the viewport edge. `zoom === 1` ("100%") means this
+ * readable default — Reset returns here.
+ */
+const FIT_WIDTH_PAD = 0.98;
+/**
+ * Readability floor for very wide sources: at default zoom, never show more
+ * than this many source pixels across the usable viewport. Tall phone / social
+ * screenshots (~1080–1300 wide) stay at true fit-to-width; ultra-wide desktop
+ * captures get zoomed in so body text stays editable (pan horizontally).
+ */
+const MAX_SOURCE_ACROSS = 1200;
+/** Cap initial upscale so tiny assets don't fill the stage (~2 CSS px / source px). */
+const MAX_FIT_CSS_PX = 2;
 const ERASE_TOLERANCE = 6; // extra image px around a brush stroke for hit-testing
 const DRAFT_PREFIX = 'eig.draft.';
 const AUTOSAVE_MS = 3000;
@@ -461,12 +479,27 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   }, [drawShape]);
 
   // ---- view transform helpers -------------------------------------------
+  /**
+   * Base scale maps image → viewport. Prefer fit-to-width so tall screenshots
+   * fill the stage (minimal side gutters) and body text stays readable; the
+   * user pans vertically for the rest. Very wide sources get a readability
+   * bump; tiny sources are clamped so they aren't blown up absurdly.
+   * User zoom multiplies this (`scale = fit * zoom`); zoom=1 is the default.
+   */
   const computeFit = useCallback(() => {
     const img = imgRef.current;
     const c = displayRef.current;
     if (!img || !c) return;
-    const fit = Math.min(c.width / (img.naturalWidth || 1), c.height / (img.naturalHeight || 1)) || 1;
-    viewRef.current.fit = fit;
+    const iw = img.naturalWidth || 1;
+    const dpr = window.devicePixelRatio || 1;
+    const usable = c.width * FIT_WIDTH_PAD;
+    // Primary: fill viewport width (tall images overflow vertically → pan).
+    let fit = usable / iw;
+    // Wide sources: zoom in so ≤ MAX_SOURCE_ACROSS source px span the stage.
+    if (iw > MAX_SOURCE_ACROSS) fit = Math.max(fit, usable / MAX_SOURCE_ACROSS);
+    // Tiny sources: don't upscale past ~2 CSS pixels per source pixel.
+    fit = Math.min(fit, MAX_FIT_CSS_PX * dpr);
+    viewRef.current.fit = fit || 1;
   }, []);
 
   const clampView = useCallback(() => {
@@ -582,6 +615,9 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
           }
         } catch { /* ignore corrupt entry */ }
       }
+      // New source → default readable view (fit-width at 100%).
+      viewRef.current.zoom = 1;
+      setZoomPct(100);
       rebuildBase();
       layout();
       setLoaded(true);
@@ -662,6 +698,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     applyZoomAt(c.width / 2, c.height / 2, factor);
   }, [applyZoomAt]);
 
+  /** Return to the default readable view (fit-width / readability floor at 100%). */
   const resetView = useCallback(() => {
     const v = viewRef.current;
     v.zoom = 1;
@@ -1135,7 +1172,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     : '';
 
   const controlsHint =
-    'Zoom: scroll wheel or pinch\nPan: Space + drag, middle-drag, or two-finger drag\nStraight lines / squares: hold Shift (or the Straight toggle)\nTap-text: tap a word to hide/reveal, drag across to hide a range';
+    'Default view fits the image to the viewport width (100%) for readable text — pan vertically on tall screenshots.\nZoom: scroll wheel or pinch (Reset returns to fit-width)\nPan: Space + drag, middle-drag, or two-finger drag\nStraight lines / squares: hold Shift (or the Straight toggle)\nTap-text: tap a word to hide/reveal, drag across to hide a range';
 
   return (
     <div className="flex flex-col gap-3">
@@ -1198,10 +1235,10 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
 
         <div className="flex-1" />
 
-        {/* Zoom controls */}
+        {/* Zoom: 100% = default readable fit-width (not “entire image fits”). */}
         <div className="flex items-center rounded-[3px] overflow-hidden border-2 border-ink text-sm">
           <button type="button" onClick={() => zoomButton(1 / 1.25)} disabled={!loaded} className="px-2.5 py-2 bg-papercard text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom out">−</button>
-          <button type="button" onClick={resetView} disabled={!loaded} className="px-2 py-2 bg-papercard text-ink2 hover:bg-paper2 disabled:opacity-40 tabular-nums w-14 border-x-2 border-ink" title="Reset view">{zoomPct}%</button>
+          <button type="button" onClick={resetView} disabled={!loaded} className="px-2 py-2 bg-papercard text-ink2 hover:bg-paper2 disabled:opacity-40 tabular-nums w-14 border-x-2 border-ink" title="Reset to default (fit width)">{zoomPct}%</button>
           <button type="button" onClick={() => zoomButton(1.25)} disabled={!loaded} className="px-2.5 py-2 bg-papercard text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom in">+</button>
         </div>
 
@@ -1255,7 +1292,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         )}
       </div>
       <p className="text-[11px] text-ink3 -mt-1">
-        Scroll / pinch to zoom · Space or middle-drag to pan · {tool === 'eraser' ? 'tap a redaction to lift it' : tool === 'words' ? 'tap a word to hide/reveal · drag across several to hide' : 'hold Shift (or 📐) for straight lines & squares'}
+        Default view fits width (pan for the rest) · Scroll / pinch to zoom · Space or middle-drag to pan · {tool === 'eraser' ? 'tap a redaction to lift it' : tool === 'words' ? 'tap a word to hide/reveal · drag across several to hide' : 'hold Shift (or 📐) for straight lines & squares'}
       </p>
 
       {/* Submit */}
