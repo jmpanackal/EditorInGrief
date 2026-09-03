@@ -39,7 +39,17 @@ export interface Round {
   sessionId: string;
   sourceId: string;
   timerSeconds: number;
-  startedAt: number; // epoch ms; clients derive their own countdown from this
+  /**
+   * Epoch ms when the synced 3-2-1-GO pre-round countdown began. Clients derive
+   * the beat display from this (+ clock skew); the server advances to `round`
+   * after {@link COUNTDOWN_SECONDS}.
+   */
+  countdownStartedAt: number;
+  /**
+   * Epoch ms when redaction / the round timer actually begins (end of countdown).
+   * Clients derive the deadline bar from this once phase is `round`.
+   */
+  startedAt: number;
   // Round-mode config, snapshotted from the room settings at start (Batch 2):
   maxRedactions: number | null; // null = unlimited; otherwise cap on shapes/round
   quickFire: boolean; // true = short fixed timer for fast pacing
@@ -60,6 +70,12 @@ export interface RoundSettings {
   maxRedactions: number | null;
   /** Quick-fire mode: a short fixed timer overriding the word-count formula. */
   quickFire: boolean;
+  /**
+   * Host override for normal-round duration (seconds). null = auto-scale from
+   * word count / OCR via {@link computeTimerSeconds}. Ignored when quickFire
+   * is on (fixed {@link QUICKFIRE_SECONDS} applies instead).
+   */
+  timerSeconds: number | null;
 }
 
 /** A player in a session. */
@@ -104,6 +120,7 @@ export interface RoundRecap {
 
 export type Phase =
   | 'lobby' // waiting for players; host can start
+  | 'countdown' // synced 3-2-1-GO before redaction; timer not yet running
   | 'round' // everyone redacting their own copy
   | 'reveal' // submissions revealed one at a time, synced to all
   | 'scoreboard'; // between-round / end summary
@@ -174,21 +191,48 @@ export type ServerMessage =
 // ---------------------------------------------------------------------------
 
 /**
- * Round timer formula (normal / non quick-fire rounds).
+ * Round timer formula (normal / non quick-fire rounds, when the host has not
+ * set an explicit duration).
  *
  *   timer_seconds = clamp(60 + 0.5 * word_count, 60, 210)
  *
  * The floor is a hard 60s minimum so normal rounds never feel rushed; longer
  * sources scale up to a generous 3.5 minute ceiling. word_count only affects
  * pacing; a rough estimate (OCR or seed metadata) is fine. Quick-fire mode
- * bypasses this entirely (see {@link QUICKFIRE_SECONDS}).
+ * and host overrides bypass this (see {@link resolveRoundTimerSeconds}).
  */
 export function computeTimerSeconds(wordCount: number): number {
   const raw = 60 + 0.5 * wordCount;
-  return Math.round(Math.min(210, Math.max(60, raw)));
+  return Math.round(Math.min(210, Math.max(NORMAL_TIMER_MIN, raw)));
 }
 
-/** Fixed timer (seconds) for quick-fire rounds — overrides the pacing formula. */
+/** Fixed timer (seconds) for quick-fire rounds — overrides host + OCR formula. */
 export const QUICKFIRE_SECONDS = 25;
+
+/** Synced pre-round countdown length (3 → 2 → 1 → GO, one second each). */
+export const COUNTDOWN_SECONDS = 4;
+
+/** Host-settable normal-round timer bounds (seconds). */
+export const NORMAL_TIMER_MIN = 60;
+export const NORMAL_TIMER_MAX = 300;
+
+/** Clamp a host-chosen normal-round duration into sane bounds. */
+export function clampNormalTimerSeconds(seconds: number): number {
+  if (!Number.isFinite(seconds)) return NORMAL_TIMER_MIN;
+  return Math.min(NORMAL_TIMER_MAX, Math.max(NORMAL_TIMER_MIN, Math.round(seconds)));
+}
+
+/**
+ * Resolve the timer that will be snapshotted onto the next round:
+ * quick-fire → fixed short timer; else host override if set; else OCR formula.
+ */
+export function resolveRoundTimerSeconds(
+  settings: Pick<RoundSettings, 'quickFire' | 'timerSeconds'>,
+  wordCount: number,
+): number {
+  if (settings.quickFire) return QUICKFIRE_SECONDS;
+  if (settings.timerSeconds != null) return clampNormalTimerSeconds(settings.timerSeconds);
+  return computeTimerSeconds(wordCount);
+}
 
 export const WS_PORT = 8787;

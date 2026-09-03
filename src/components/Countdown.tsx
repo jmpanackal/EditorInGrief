@@ -12,6 +12,9 @@ interface Props {
 export function Countdown({ startedAt, durationSeconds, clockOffsetMs, onExpire }: Props) {
   const [remaining, setRemaining] = useState(durationSeconds);
   const firedRef = useRef(false);
+  // Keep latest onExpire without resetting the fire latch when the callback identity changes.
+  const onExpireRef = useRef(onExpire);
+  onExpireRef.current = onExpire;
 
   useEffect(() => {
     firedRef.current = false;
@@ -22,13 +25,30 @@ export function Countdown({ startedAt, durationSeconds, clockOffsetMs, onExpire 
       setRemaining(rem);
       if (rem <= 0 && !firedRef.current) {
         firedRef.current = true;
-        onExpire?.();
+        onExpireRef.current?.();
       }
     };
     tick();
     const id = setInterval(tick, 200);
     return () => clearInterval(id);
-  }, [startedAt, durationSeconds, clockOffsetMs, onExpire]);
+  }, [startedAt, durationSeconds, clockOffsetMs]);
+
+  // If the tab was backgrounded (intervals throttled) and we resume past zero,
+  // still fire expire once.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now() + clockOffsetMs;
+      const elapsed = (now - startedAt) / 1000;
+      if (elapsed >= durationSeconds && !firedRef.current) {
+        firedRef.current = true;
+        setRemaining(0);
+        onExpireRef.current?.();
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [startedAt, durationSeconds, clockOffsetMs]);
 
   const pct = Math.max(0, Math.min(1, remaining / durationSeconds));
   const secs = Math.ceil(remaining);

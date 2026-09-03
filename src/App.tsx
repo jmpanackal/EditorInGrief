@@ -62,7 +62,10 @@ function PhaseView({ room, clockOffsetMs }: { room: ReturnType<typeof useRoom>; 
   switch (phase) {
     case 'lobby':
       return <Lobby room={room} />;
+    case 'countdown':
     case 'round':
+      // Same view: countdown overlays the editor (image preloads) until the
+      // server flips phase to `round` and the deadline bar starts ticking.
       return <RoundView room={room} clockOffsetMs={clockOffsetMs} />;
     case 'reveal':
       return <Reveal room={room} />;

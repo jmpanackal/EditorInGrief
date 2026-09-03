@@ -48,11 +48,17 @@ export default {
           '60%': { transform: 'rotate(-8deg) scale(0.92)', opacity: '1' },
           '100%': { transform: 'rotate(-8deg) scale(1)', opacity: '1' },
         },
+        'countdown-pop': {
+          '0%': { transform: 'scale(1.35)', opacity: '0' },
+          '55%': { transform: 'scale(0.94)', opacity: '1' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
       },
       animation: {
         pop: 'pop 0.18s ease-out',
         'fade-up': 'fade-up 0.28s ease-out',
         'stamp-in': 'stamp-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2)',
+        'countdown-pop': 'countdown-pop 0.45s cubic-bezier(0.2, 0.85, 0.3, 1.15)',
       },
     },
   },

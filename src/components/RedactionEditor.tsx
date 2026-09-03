@@ -1101,11 +1101,18 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   }, [onSubmit, clearSaved]);
 
   // Timer-driven auto-submit: fire once whenever flushToken changes to a truthy value.
+  // If the image isn't loaded yet, keep a pending flag so we flush as soon as it is
+  // (empty/unedited source still submits — required for deadline auto-file).
   const lastFlush = useRef(0);
+  const pendingFlush = useRef(false);
   useEffect(() => {
-    if (!flushToken || flushToken === lastFlush.current) return;
-    lastFlush.current = flushToken;
-    if (loaded && !submitted) handleSubmit();
+    if (flushToken && flushToken !== lastFlush.current) {
+      lastFlush.current = flushToken;
+      pendingFlush.current = true;
+    }
+    if (!pendingFlush.current || submitted || !loaded) return;
+    pendingFlush.current = false;
+    handleSubmit();
   }, [flushToken, loaded, submitted, handleSubmit]);
 
   // Once the server confirms our submission, drop the autosave.

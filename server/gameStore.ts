@@ -14,8 +14,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
-  computeTimerSeconds,
-  QUICKFIRE_SECONDS,
+  COUNTDOWN_SECONDS,
+  clampNormalTimerSeconds,
+  resolveRoundTimerSeconds,
   type Player,
   type Round,
   type RoomState,
@@ -53,6 +54,9 @@ interface Room {
   state: RoomState;
   sessionId: string;
   usedSourceIds: string[];
+  /** Ends the synced 3-2-1-GO and enters the active redaction phase. */
+  countdownTimer?: ReturnType<typeof setTimeout>;
+  /** Authoritative round-deadline timer → force reveal (+ grace for late submits). */
   autoTimer?: ReturnType<typeof setTimeout>;
   /** Per-player timers that let the round progress if a disconnect is not brief. */
   disconnectTimers: Map<string, ReturnType<typeof setTimeout>>;
@@ -60,7 +64,8 @@ interface Room {
   hostGraceTimer?: ReturnType<typeof setTimeout>;
 }
 
-const AUTO_SUBMIT_GRACE_MS = 1800;
+/** Extra window after the deadline so client auto-submits can still land. */
+const AUTO_SUBMIT_GRACE_MS = 2500;
 /**
  * Reconnect/session policy (Batch 3):
  * - A disconnect never removes a player or their submission; we only flip
@@ -75,7 +80,11 @@ const AUTO_SUBMIT_GRACE_MS = 1800;
 const PLAYER_DISCONNECT_GRACE_MS = 20000;
 const HOST_GRACE_MS = 30000;
 
-const DEFAULT_ROUND_SETTINGS: RoundSettings = { maxRedactions: null, quickFire: false };
+const DEFAULT_ROUND_SETTINGS: RoundSettings = {
+  maxRedactions: null,
+  quickFire: false,
+  timerSeconds: null, // null = OCR / word-count auto-scale
+};
 
 export class GameStore {
   private rooms = new Map<string, Room>();
@@ -190,10 +199,10 @@ export class GameStore {
     // unless they reconnect first.
     if (room.state.hostId === playerId) this.scheduleHostTransfer(room);
 
-    // During an active round, don't advance the phase immediately on a drop —
-    // give the player a grace window to reconnect and keep redacting. If they're
-    // still gone when it elapses, let the round proceed without them.
-    if (room.state.phase === 'round') {
+    // During countdown/round, don't advance immediately on a drop — give the
+    // player a grace window to reconnect. If they're still gone when it elapses,
+    // let the round proceed without them (once redaction is active).
+    if (room.state.phase === 'round' || room.state.phase === 'countdown') {
       const existing = room.disconnectTimers.get(playerId);
       if (existing) clearTimeout(existing);
       room.disconnectTimers.set(
@@ -242,6 +251,11 @@ export class GameStore {
       next.maxRedactions = v == null || !Number.isFinite(v) || v <= 0 ? null : Math.min(99, Math.floor(v));
     }
     if ('quickFire' in settings) next.quickFire = !!settings.quickFire;
+    if ('timerSeconds' in settings) {
+      const v = settings.timerSeconds;
+      // null/undefined/invalid = auto (OCR formula); otherwise clamp to normal bounds.
+      next.timerSeconds = v == null || !Number.isFinite(v) ? null : clampNormalTimerSeconds(v);
+    }
     room.state.roundSettings = next;
     this.broadcast(room.state.code);
   }
@@ -300,6 +314,9 @@ export class GameStore {
   // -------------------------------------------------------------------------
   startRound(code: string, playerId: string, sourceId?: string): void {
     const room = this.requireHost(code, playerId);
+    if (room.state.phase !== 'lobby' && room.state.phase !== 'scoreboard') {
+      throw new GameError('You can only start a round from the lobby.');
+    }
     const source = this.pickSource(room, sourceId);
     if (!source) throw new GameError('No source images available. Seed bank is empty.');
 
@@ -307,16 +324,16 @@ export class GameStore {
     room.usedSourceIds.push(source.id);
 
     const settings = room.state.roundSettings;
-    const timerSeconds = settings.quickFire
-      ? QUICKFIRE_SECONDS
-      : computeTimerSeconds(source.wordCount);
+    const timerSeconds = resolveRoundTimerSeconds(settings, source.wordCount);
+    const now = Date.now();
 
     const round: Round = {
       id: randomId('r'),
       sessionId: room.sessionId,
       sourceId: source.id,
       timerSeconds,
-      startedAt: Date.now(),
+      countdownStartedAt: now,
+      startedAt: now + COUNTDOWN_SECONDS * 1000,
       maxRedactions: settings.maxRedactions,
       quickFire: settings.quickFire,
       submissions: [],
@@ -328,21 +345,21 @@ export class GameStore {
     room.state.currentRound = round;
     room.state.currentSource = { ...source };
     room.state.roundNumber += 1;
-    room.state.phase = 'round';
+    room.state.phase = 'countdown';
     // A staged upload is consumed by the round it feeds; revert to seed bank next.
     if (room.state.pendingSource && room.state.pendingSource.id === source.id) {
       room.state.pendingSource = null;
     }
 
-    // Schedule server-side fallback: force reveal shortly after the timer ends
-    // (clients auto-submit at 0; the grace window lets those submissions land).
-    this.clearAutoTimer(room);
-    room.autoTimer = setTimeout(() => {
-      if (room.state.phase === 'round' && room.state.currentRound?.id === round.id) {
-        this.toReveal(room);
+    // Synced pre-round countdown, then begin redaction + deadline timer.
+    this.clearPhaseTimers(room);
+    room.countdownTimer = setTimeout(() => {
+      room.countdownTimer = undefined;
+      if (room.state.phase === 'countdown' && room.state.currentRound?.id === round.id) {
+        this.beginRedaction(room);
         this.broadcast(room.state.code);
       }
-    }, round.timerSeconds * 1000 + AUTO_SUBMIT_GRACE_MS);
+    }, COUNTDOWN_SECONDS * 1000);
 
     this.broadcast(room.state.code);
   }
@@ -351,24 +368,23 @@ export class GameStore {
     const room = this.requireRoom(code);
     const round = room.state.currentRound;
     if (!round || round.id !== roundId) return; // stale submit; ignore
-    if (room.state.phase !== 'round') return;
 
-    const existing = round.submissions.find((s) => s.playerId === playerId);
-    if (existing) {
-      existing.editedImageUrl = editedImageUrl; // allow overwrite until reveal
-    } else {
-      const submission: Submission = {
-        id: randomId('s'),
-        roundId: round.id,
-        playerId,
-        editedImageUrl,
-        votesCount: 0,
-      };
-      round.submissions.push(submission);
+    // Active redaction: normal submit (+ overwrite until reveal).
+    if (room.state.phase === 'round') {
+      this.upsertSubmission(round, playerId, editedImageUrl);
+      this.maybeAutoReveal(room);
+      this.broadcast(room.state.code);
+      return;
     }
 
-    this.maybeAutoReveal(room);
-    this.broadcast(room.state.code);
+    // Late / auto-submit that arrived after the authoritative deadline flipped us
+    // to reveal — still accept a first submission so the player isn't missing.
+    if (room.state.phase === 'reveal') {
+      const existing = round.submissions.find((s) => s.playerId === playerId);
+      if (existing) return;
+      this.upsertSubmission(round, playerId, editedImageUrl);
+      this.broadcast(room.state.code);
+    }
   }
 
   advanceReveal(code: string, playerId: string, direction: 1 | -1 = 1): void {
@@ -409,7 +425,7 @@ export class GameStore {
       }
     }
     room.state.phase = 'scoreboard';
-    this.clearAutoTimer(room);
+    this.clearPhaseTimers(room);
     this.broadcast(room.state.code);
   }
 
@@ -418,13 +434,47 @@ export class GameStore {
     room.state.phase = 'lobby';
     room.state.currentRound = null;
     room.state.currentSource = null;
-    this.clearAutoTimer(room);
+    this.clearPhaseTimers(room);
     this.broadcast(room.state.code);
   }
 
   // -------------------------------------------------------------------------
   // Internal transitions
   // -------------------------------------------------------------------------
+  /** Countdown finished → active redaction + authoritative deadline timer. */
+  private beginRedaction(room: Room): void {
+    const round = room.state.currentRound;
+    if (!round || room.state.phase !== 'countdown') return;
+    room.state.phase = 'round';
+    // Align startedAt to "now" so clock skew / timer drift during countdown
+    // doesn't eat into the redaction window.
+    round.startedAt = Date.now();
+
+    this.clearPhaseTimers(room);
+    room.autoTimer = setTimeout(() => {
+      if (room.state.phase === 'round' && room.state.currentRound?.id === round.id) {
+        this.toReveal(room);
+        this.broadcast(room.state.code);
+      }
+    }, round.timerSeconds * 1000 + AUTO_SUBMIT_GRACE_MS);
+  }
+
+  private upsertSubmission(round: Round, playerId: string, editedImageUrl: string): void {
+    const existing = round.submissions.find((s) => s.playerId === playerId);
+    if (existing) {
+      existing.editedImageUrl = editedImageUrl; // allow overwrite until reveal
+      return;
+    }
+    const submission: Submission = {
+      id: randomId('s'),
+      roundId: round.id,
+      playerId,
+      editedImageUrl,
+      votesCount: 0,
+    };
+    round.submissions.push(submission);
+  }
+
   private maybeAutoReveal(room: Room): void {
     const round = room.state.currentRound;
     if (!round || room.state.phase !== 'round') return;
@@ -437,7 +487,7 @@ export class GameStore {
   private toReveal(room: Room): void {
     room.state.phase = 'reveal';
     if (room.state.currentRound) room.state.currentRound.revealIndex = 0;
-    this.clearAutoTimer(room);
+    this.clearPhaseTimers(room);
   }
 
   private pickSource(room: Room, sourceId?: string): Source | undefined {
@@ -454,7 +504,11 @@ export class GameStore {
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
-  private clearAutoTimer(room: Room): void {
+  private clearPhaseTimers(room: Room): void {
+    if (room.countdownTimer) {
+      clearTimeout(room.countdownTimer);
+      room.countdownTimer = undefined;
+    }
     if (room.autoTimer) {
       clearTimeout(room.autoTimer);
       room.autoTimer = undefined;
