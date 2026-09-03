@@ -337,13 +337,6 @@ const MAX_ZOOM = 8;
  * readable default — Reset returns here.
  */
 const FIT_WIDTH_PAD = 0.98;
-/**
- * Readability floor for very wide sources: at default zoom, never show more
- * than this many source pixels across the usable viewport. Tall phone / social
- * screenshots (~1080–1300 wide) stay at true fit-to-width; ultra-wide desktop
- * captures get zoomed in so body text stays editable (pan horizontally).
- */
-const MAX_SOURCE_ACROSS = 1200;
 /** Cap initial upscale so tiny assets don't fill the stage (~2 CSS px / source px). */
 const MAX_FIT_CSS_PX = 2;
 const ERASE_TOLERANCE = 6; // extra image px around a brush stroke for hit-testing
@@ -482,26 +475,29 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   /**
    * Base scale maps image → viewport. Prefer fit-to-width so tall screenshots
    * fill the stage (minimal side gutters) and body text stays readable; the
-   * user pans vertically for the rest. Very wide sources get a readability
-   * bump; tiny sources are clamped so they aren't blown up absurdly.
-   * User zoom multiplies this (`scale = fit * zoom`); zoom=1 is the default.
+   * user pans vertically for the rest. Tiny sources are clamped so they
+   * aren't blown up absurdly. User zoom multiplies this (`scale = fit * zoom`);
+   * zoom=1 is the default readable view.
    */
   const computeFit = useCallback(() => {
     const img = imgRef.current;
     const c = displayRef.current;
-    if (!img || !c) return;
+    if (!img || !c || c.width < 2) return;
     const iw = img.naturalWidth || 1;
     const dpr = window.devicePixelRatio || 1;
     const usable = c.width * FIT_WIDTH_PAD;
-    // Primary: fill viewport width (tall images overflow vertically → pan).
+    // Fill viewport width (tall images overflow vertically → pan).
     let fit = usable / iw;
-    // Wide sources: zoom in so ≤ MAX_SOURCE_ACROSS source px span the stage.
-    if (iw > MAX_SOURCE_ACROSS) fit = Math.max(fit, usable / MAX_SOURCE_ACROSS);
     // Tiny sources: don't upscale past ~2 CSS pixels per source pixel.
     fit = Math.min(fit, MAX_FIT_CSS_PX * dpr);
     viewRef.current.fit = fit || 1;
   }, []);
 
+  /**
+   * Keep the image on-stage. Document-style: top-align when the scaled image
+   * is shorter than the viewport (avoid floating mid-canvas gutters after
+   * fit-to-width); center horizontally only when letterboxed on the sides.
+   */
   const clampView = useCallback(() => {
     const c = displayRef.current;
     const img = imgRef.current;
@@ -511,7 +507,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     const sw = (img.naturalWidth || 1) * scale;
     const sh = (img.naturalHeight || 1) * scale;
     v.ox = sw <= c.width ? (c.width - sw) / 2 : Math.min(0, Math.max(c.width - sw, v.ox));
-    v.oy = sh <= c.height ? (c.height - sh) / 2 : Math.min(0, Math.max(c.height - sh, v.oy));
+    // Top-align when there's spare vertical room; otherwise clamp pan range.
+    v.oy = sh <= c.height ? 0 : Math.min(0, Math.max(c.height - sh, v.oy));
   }, []);
 
   const renderDisplay = useCallback(() => {
@@ -615,12 +612,20 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
           }
         } catch { /* ignore corrupt entry */ }
       }
-      // New source → default readable view (fit-width at 100%).
+      // New source → default readable view (fit-width at 100%), top-left origin
+      // before clamp recenters horizontally if the image is narrower than the stage.
       viewRef.current.zoom = 1;
+      viewRef.current.ox = 0;
+      viewRef.current.oy = 0;
       setZoomPct(100);
       rebuildBase();
       layout();
       setLoaded(true);
+      // Container may still be settling (fonts, flex); re-fit once more next frame.
+      requestAnimationFrame(() => {
+        if (imgRef.current !== img) return;
+        layout();
+      });
     };
     img.onerror = () => setLoaded(false);
     img.src = imageUrl;
@@ -698,10 +703,12 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     applyZoomAt(c.width / 2, c.height / 2, factor);
   }, [applyZoomAt]);
 
-  /** Return to the default readable view (fit-width / readability floor at 100%). */
+  /** Return to the default readable view (fit-width at 100%, top-aligned). */
   const resetView = useCallback(() => {
     const v = viewRef.current;
     v.zoom = 1;
+    v.ox = 0;
+    v.oy = 0;
     layout();
     setZoomPct(100);
   }, [layout]);
@@ -1172,7 +1179,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     : '';
 
   const controlsHint =
-    'Default view fits the image to the viewport width (100%) for readable text — pan vertically on tall screenshots.\nZoom: scroll wheel or pinch (Reset returns to fit-width)\nPan: Space + drag, middle-drag, or two-finger drag\nStraight lines / squares: hold Shift (or the Straight toggle)\nTap-text: tap a word to hide/reveal, drag across to hide a range';
+    'Default view fits the image to the viewport width (100%) for readable text — pan vertically on tall screenshots.\nZoom: scroll wheel or pinch (Reset returns to fit-width, top-aligned)\nPan: Space + drag, middle-drag, or two-finger drag\nStraight lines / squares: hold Shift (or the Straight toggle)\nTap-text: tap a word to hide/reveal, drag across to hide a range';
 
   return (
     <div className="flex flex-col gap-3">
