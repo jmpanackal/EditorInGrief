@@ -103,6 +103,12 @@ export interface RoomState {
   roundNumber: number;
   /** The source chosen for the current/most-recent round (denormalized for clients). */
   currentSource: Source | null;
+  /**
+   * A source uploaded during the lobby pre-round window, previewed to everyone.
+   * When set, the next round uses it instead of pulling a random seed. Cleared
+   * back to null (revert to seed bank) when a round starts or the uploader clears it.
+   */
+  pendingSource: Source | null;
   currentRound: Round | null;
   serverTime: number; // epoch ms at snapshot; lets clients correct for clock skew
 }
@@ -125,6 +131,11 @@ export type ClientMessage =
   | { type: 'rejoin'; code: string; playerId: string } // reconnect support
   | { type: 'setVoting'; enabled: boolean } // host only
   | { type: 'setRoundSettings'; settings: Partial<RoundSettings> } // host only
+  // Pre-round upload (Phase 3 pulled forward): any player may stage a screenshot
+  // as the next round's source. Image travels as a (downscaled) data URL through
+  // the same WS channel; server stores it in the in-memory source bank.
+  | { type: 'uploadSource'; imageUrl: string; wordCount: number; ocrText: string | null }
+  | { type: 'clearSource' } // remove the staged upload; revert to seed bank
   | { type: 'startRound'; sourceId?: string } // host only; sourceId optional (else random from bank)
   | { type: 'submit'; roundId: string; editedImageUrl: string }
   | { type: 'advanceReveal'; direction?: 1 | -1 } // host only
@@ -143,13 +154,18 @@ export type ServerMessage =
 // ---------------------------------------------------------------------------
 
 /**
- * Round timer formula (per spec):
- *   timer_seconds = clamp(30 + 0.45 * word_count, 45, 150)
- * word_count only affects pacing; a rough estimate is fine.
+ * Round timer formula (normal / non quick-fire rounds).
+ *
+ *   timer_seconds = clamp(60 + 0.5 * word_count, 60, 210)
+ *
+ * The floor is a hard 60s minimum so normal rounds never feel rushed; longer
+ * sources scale up to a generous 3.5 minute ceiling. word_count only affects
+ * pacing; a rough estimate (OCR or seed metadata) is fine. Quick-fire mode
+ * bypasses this entirely (see {@link QUICKFIRE_SECONDS}).
  */
 export function computeTimerSeconds(wordCount: number): number {
-  const raw = 30 + 0.45 * wordCount;
-  return Math.round(Math.min(150, Math.max(45, raw)));
+  const raw = 60 + 0.5 * wordCount;
+  return Math.round(Math.min(210, Math.max(60, raw)));
 }
 
 /** Fixed timer (seconds) for quick-fire rounds — overrides the pacing formula. */

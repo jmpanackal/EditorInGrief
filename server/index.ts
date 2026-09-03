@@ -113,6 +113,12 @@ function handle(ws: WebSocket, msg: ClientMessage) {
     case 'setRoundSettings':
       withPlayer(ws, (code, pid) => store.setRoundSettings(code, pid, msg.settings));
       break;
+    case 'uploadSource':
+      withPlayer(ws, (code, pid) => store.uploadSource(code, pid, msg.imageUrl, msg.wordCount, msg.ocrText));
+      break;
+    case 'clearSource':
+      withPlayer(ws, (code, pid) => store.clearSource(code, pid));
+      break;
     case 'startRound':
       withPlayer(ws, (code, pid) => store.startRound(code, pid, msg.sourceId));
       break;

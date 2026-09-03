@@ -44,6 +44,8 @@ export interface RoomApi {
 
   setVoting: (enabled: boolean) => void;
   setRoundSettings: (settings: Partial<RoundSettings>) => void;
+  uploadSource: (imageUrl: string, wordCount: number, ocrText: string | null) => void;
+  clearSource: () => void;
   startRound: (sourceId?: string) => void;
   submit: (roundId: string, editedImageUrl: string) => void;
   advanceReveal: (direction?: 1 | -1) => void;
@@ -142,6 +144,8 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
 
   const setVoting = useCallback((enabled: boolean) => send({ type: 'setVoting', enabled }), [send]);
   const setRoundSettings = useCallback((settings: Partial<RoundSettings>) => send({ type: 'setRoundSettings', settings }), [send]);
+  const uploadSource = useCallback((imageUrl: string, wordCount: number, ocrText: string | null) => send({ type: 'uploadSource', imageUrl, wordCount, ocrText }), [send]);
+  const clearSource = useCallback(() => send({ type: 'clearSource' }), [send]);
   const startRound = useCallback((sourceId?: string) => send({ type: 'startRound', sourceId }), [send]);
   const submit = useCallback((roundId: string, editedImageUrl: string) => send({ type: 'submit', roundId, editedImageUrl }), [send]);
   const advanceReveal = useCallback((direction: 1 | -1 = 1) => send({ type: 'advanceReveal', direction }), [send]);
@@ -165,6 +169,8 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
     leave,
     setVoting,
     setRoundSettings,
+    uploadSource,
+    clearSource,
     startRound,
     submit,
     advanceReveal,

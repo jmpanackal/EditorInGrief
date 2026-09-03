@@ -137,6 +137,7 @@ export class GameStore {
       roundSettings: { ...DEFAULT_ROUND_SETTINGS },
       roundNumber: 0,
       currentSource: null,
+      pendingSource: null,
       currentRound: null,
       serverTime: Date.now(),
     };
@@ -246,6 +247,55 @@ export class GameStore {
   }
 
   // -------------------------------------------------------------------------
+  // Source upload (pre-round window). Any player in the lobby may stage a
+  // screenshot; it becomes the next round's source. Stored in-memory only.
+  // -------------------------------------------------------------------------
+  uploadSource(
+    code: string,
+    playerId: string,
+    imageUrl: string,
+    wordCount: number,
+    ocrText: string | null,
+  ): void {
+    const room = this.requireRoom(code);
+    const player = room.state.players.find((p) => p.id === playerId);
+    if (!player) throw new GameError('That player is no longer in the room.');
+    if (room.state.phase !== 'lobby') throw new GameError('You can only upload while in the lobby.');
+    if (typeof imageUrl !== 'string' || !imageUrl.startsWith('data:image/')) {
+      throw new GameError('Unsupported image data.');
+    }
+    // Guard against absurd payloads (base64 is ~1.37x raw bytes). ~8MB data URL.
+    if (imageUrl.length > 8_000_000) {
+      throw new GameError('That image is too large — try a smaller screenshot.');
+    }
+    const wc = Number.isFinite(wordCount) ? Math.max(0, Math.min(2000, Math.floor(wordCount))) : 0;
+    const source: Source = {
+      id: randomId('src'),
+      uploadedBy: playerId,
+      imageUrl,
+      ocrText: ocrText ?? null,
+      wordCount: wc,
+      createdAt: Date.now(),
+      timesUsed: 0,
+    };
+    this.sources.set(source.id, source);
+    room.state.pendingSource = { ...source };
+    this.broadcast(room.state.code);
+  }
+
+  clearSource(code: string, playerId: string): void {
+    const room = this.requireRoom(code);
+    const player = room.state.players.find((p) => p.id === playerId);
+    if (!player) return;
+    const pending = room.state.pendingSource;
+    if (pending) {
+      this.sources.delete(pending.id);
+      room.state.pendingSource = null;
+      this.broadcast(room.state.code);
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Rounds
   // -------------------------------------------------------------------------
   startRound(code: string, playerId: string, sourceId?: string): void {
@@ -279,6 +329,10 @@ export class GameStore {
     room.state.currentSource = { ...source };
     room.state.roundNumber += 1;
     room.state.phase = 'round';
+    // A staged upload is consumed by the round it feeds; revert to seed bank next.
+    if (room.state.pendingSource && room.state.pendingSource.id === source.id) {
+      room.state.pendingSource = null;
+    }
 
     // Schedule server-side fallback: force reveal shortly after the timer ends
     // (clients auto-submit at 0; the grace window lets those submissions land).
@@ -388,6 +442,10 @@ export class GameStore {
 
   private pickSource(room: Room, sourceId?: string): Source | undefined {
     if (sourceId && this.sources.has(sourceId)) return this.sources.get(sourceId);
+    // A player staged an upload during the lobby — use it for this round.
+    if (room.state.pendingSource && this.sources.has(room.state.pendingSource.id)) {
+      return this.sources.get(room.state.pendingSource.id);
+    }
     const all = [...this.sources.values()];
     if (all.length === 0) return undefined;
     // Prefer sources not used yet in this room; fall back to least-recently used.

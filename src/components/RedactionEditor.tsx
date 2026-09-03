@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { runOcr, type OcrBox, type OcrWord } from '../lib/ocr';
 
 /**
  * RedactionEditor — the core mechanic.
  *
  * Real document-redaction: you can only PAINT over the original image's pixels,
- * never add. Each shape is filled with the auto-sampled LOCAL BACKGROUND color
- * of the original image around it (default) so the covered text blends away, or
- * solid black when the Blend toggle is off. The output IS the original image
- * with parts covered.
+ * never add. Each shape is ALWAYS filled with the auto-sampled LOCAL BACKGROUND
+ * color of the original image around it (the "blend") so the covered text just
+ * disappears into a matching background. The output IS the original image with
+ * parts covered. (If pixel sampling is impossible — e.g. a tainted canvas — we
+ * fall back to a neutral gray fill; there is no user-facing black/blend toggle.)
  *
  * Design notes:
  * - Coordinates are kept in ORIGINAL IMAGE space (the source's natural pixels).
@@ -35,15 +37,21 @@ type Shape =
   | { type: 'rect'; x: number; y: number; w: number; h: number; fill: string }
   | { type: 'brush'; points: Point[]; thickness: number; fill: string };
 
-type Tool = 'rect' | 'brush' | 'eraser';
+type Tool = 'rect' | 'brush' | 'eraser' | 'words';
+/** Redact whole words (default) or individual letters in the tap/drag tool. */
+type WordGranularity = 'word' | 'letter';
 type RGB = [number, number, number];
 
-/** Solid-black fallback used when blend mode is off or sampling isn't possible. */
-const BLACK = '#000';
+/**
+ * Neutral fallback fill, used ONLY when local-background sampling is impossible
+ * (e.g. a cross-origin/tainted canvas where getImageData throws). In the normal
+ * same-origin path every redaction blends with the sampled background instead.
+ */
+const FALLBACK_FILL = 'rgb(128, 128, 128)';
 
 /** Median of each RGB channel independently — robust to text/outlier pixels. */
 function medianColor(samples: RGB[]): string {
-  if (samples.length === 0) return BLACK;
+  if (samples.length === 0) return FALLBACK_FILL;
   const mid = samples.length >> 1;
   const pick = (i: 0 | 1 | 2) => {
     const chan = samples.map((s) => s[i]).sort((a, b) => a - b);
@@ -83,7 +91,7 @@ function sampleRectFill(img: ImageData, rx: number, ry: number, rw: number, rh: 
       push(px, py);
     }
   }
-  return samples.length ? medianColor(samples) : BLACK;
+  return samples.length ? medianColor(samples) : FALLBACK_FILL;
 }
 
 /**
@@ -94,7 +102,7 @@ function sampleRectFill(img: ImageData, rx: number, ry: number, rw: number, rh: 
  */
 function sampleBrushFill(img: ImageData, points: Point[], thickness: number): string {
   const { width: W, height: H, data } = img;
-  if (points.length === 0) return BLACK;
+  if (points.length === 0) return FALLBACK_FILL;
   const radius = Math.max(6, Math.round(thickness)); // look a bit beyond the stroke
   const nStep = Math.max(1, Math.floor(points.length / 12)); // <=~12 anchor points
   const samples: RGB[] = [];
@@ -113,7 +121,7 @@ function sampleBrushFill(img: ImageData, points: Point[], thickness: number): st
       push(cx + Math.round(Math.cos(ang) * radius), cy + Math.round(Math.sin(ang) * radius));
     }
   }
-  return samples.length ? medianColor(samples) : BLACK;
+  return samples.length ? medianColor(samples) : FALLBACK_FILL;
 }
 
 /** Shortest distance from point p to the segment a→b (image space). */
@@ -149,6 +157,123 @@ function shapeHit(s: Shape, p: Point): boolean {
   return false;
 }
 
+/** Area of an OCR box (image px²) — used to pick the tightest box under a tap. */
+function boxArea(b: OcrBox): number {
+  return Math.max(0, b.x1 - b.x0) * Math.max(0, b.y1 - b.y0);
+}
+
+/** Is an image-space point inside a box (with a small padding tolerance)? */
+function pointInBox(p: Point, b: OcrBox, pad: number): boolean {
+  return p.x >= b.x0 - pad && p.x <= b.x1 + pad && p.y >= b.y0 - pad && p.y <= b.y1 + pad;
+}
+
+/** Does a box overlap a normalized selection rect? */
+function boxIntersectsRect(b: OcrBox, r: { x0: number; y0: number; x1: number; y1: number }): boolean {
+  return b.x0 <= r.x1 && b.x1 >= r.x0 && b.y0 <= r.y1 && b.y1 >= r.y0;
+}
+
+/** Stroke a polyline (or a single-point dot outline) in image space. */
+function strokePath(ctx: CanvasRenderingContext2D, points: Point[], dotRadius: number): void {
+  if (points.length === 0) return;
+  if (points.length === 1) {
+    const p = points[0];
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, dotRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    return;
+  }
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.stroke();
+}
+
+/**
+ * Draw a DRAWING-TIME-ONLY outline around the in-progress shape so the user can
+ * see exactly where the (often near-invisible) blend fill will land. Rendered in
+ * image space through the active view transform; `scale` converts desired
+ * on-screen pixel widths into image units. Committed shapes never get this.
+ */
+function drawActiveOutline(ctx: CanvasRenderingContext2D, s: Shape, scale: number): void {
+  ctx.save();
+  const dash = [6 / scale, 4 / scale];
+  if (s.type === 'rect') {
+    const x = Math.min(s.x, s.x + s.w);
+    const y = Math.min(s.y, s.y + s.h);
+    const w = Math.abs(s.w);
+    const h = Math.abs(s.h);
+    // Dark base stroke for contrast on light backgrounds…
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2 / scale;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.strokeRect(x, y, w, h);
+    // …then white marching dashes on top.
+    ctx.setLineDash(dash);
+    ctx.lineWidth = 1.4 / scale;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.strokeRect(x, y, w, h);
+  } else {
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // Translucent band showing the covered area (the actual stroke width)…
+    ctx.setLineDash([]);
+    ctx.lineWidth = s.thickness;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+    strokePath(ctx, s.points, s.thickness / 2);
+    // …plus a dashed centerline (dark under, white over) so location is obvious.
+    ctx.lineWidth = 2 / scale;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+    strokePath(ctx, s.points, s.thickness / 2);
+    ctx.setLineDash(dash);
+    ctx.lineWidth = 1.4 / scale;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    strokePath(ctx, s.points, s.thickness / 2);
+  }
+  ctx.restore();
+}
+
+/** Faint outlines of detected OCR boxes so the user knows what's tappable. */
+function drawDetectedBoxes(ctx: CanvasRenderingContext2D, boxes: OcrBox[], scale: number): void {
+  ctx.save();
+  ctx.lineWidth = 1 / scale;
+  ctx.strokeStyle = 'rgba(129, 140, 248, 0.55)';
+  ctx.fillStyle = 'rgba(129, 140, 248, 0.08)';
+  for (const b of boxes) {
+    const w = b.x1 - b.x0;
+    const h = b.y1 - b.y0;
+    ctx.fillRect(b.x0, b.y0, w, h);
+    ctx.strokeRect(b.x0, b.y0, w, h);
+  }
+  ctx.restore();
+}
+
+/** Highlight the boxes currently under a tap/drag selection (pre-commit). */
+function drawSelectionBoxes(
+  ctx: CanvasRenderingContext2D,
+  boxes: OcrBox[],
+  rect: { x: number; y: number; w: number; h: number } | null,
+  scale: number,
+): void {
+  ctx.save();
+  if (rect && (Math.abs(rect.w) > 2 || Math.abs(rect.h) > 2)) {
+    ctx.setLineDash([5 / scale, 4 / scale]);
+    ctx.lineWidth = 1.2 / scale;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+    ctx.setLineDash([]);
+  }
+  ctx.fillStyle = 'rgba(244, 63, 94, 0.30)';
+  ctx.strokeStyle = 'rgba(244, 63, 94, 0.9)';
+  ctx.lineWidth = 1.4 / scale;
+  for (const b of boxes) {
+    const w = b.x1 - b.x0;
+    const h = b.y1 - b.y0;
+    ctx.fillRect(b.x0, b.y0, w, h);
+    ctx.strokeRect(b.x0, b.y0, w, h);
+  }
+  ctx.restore();
+}
+
 interface Props {
   imageUrl: string;
   disabled?: boolean;
@@ -173,7 +298,7 @@ const DRAFT_PREFIX = 'eig.draft.';
 const AUTOSAVE_MS = 3000;
 const DRAFT_TTL_MS = 2 * 60 * 60 * 1000; // prune stale autosaves older than 2h
 
-type GestureMode = 'none' | 'draw' | 'pan' | 'pinch';
+type GestureMode = 'none' | 'draw' | 'pan' | 'pinch' | 'words';
 interface Gesture {
   mode: GestureMode;
   panLast?: Point;
@@ -206,9 +331,18 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   const [shapeCount, setShapeCount] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [zoomPct, setZoomPct] = useState(100);
-  // Default = blend with sampled local background. Toggle off for solid black.
-  const [blend, setBlend] = useState(true);
-  const blendRef = useRef(true);
+
+  // ---- OCR tap/drag-to-redact (assist on top of manual tools) -----------
+  const ocrWordsRef = useRef<OcrWord[]>([]);
+  const [ocrState, setOcrState] = useState<'idle' | 'loading' | 'ready' | 'error' | 'empty'>('idle');
+  const ocrStartedRef = useRef(false); // guards a single OCR run per source image
+  const [granularity, setGranularity] = useState<WordGranularity>('word');
+  const granularityRef = useRef<WordGranularity>('word');
+  // Live tap/drag selection preview (image-space boxes highlighted before commit).
+  const wordSelStartRef = useRef<Point | null>(null);
+  const wordSelBoxesRef = useRef<OcrBox[]>([]);
+  const wordSelRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+
   // Straight-line / square constrain: Shift on desktop OR this toggle for touch.
   const [constrain, setConstrain] = useState(false);
   const constrainRef = useRef(false);
@@ -218,7 +352,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
 
   useEffect(() => { toolRef.current = tool; }, [tool]);
   useEffect(() => { thicknessRef.current = thickness; }, [thickness]);
-  useEffect(() => { blendRef.current = blend; }, [blend]);
+  useEffect(() => { granularityRef.current = granularity; }, [granularity]);
   useEffect(() => { constrainRef.current = constrain; }, [constrain]);
 
   const max = maxRedactions ?? null;
@@ -243,18 +377,18 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
   }, [storageKey]);
 
-  // Compute the fill color for a shape: sampled background (default) or black.
+  // Compute the fill color for a shape: ALWAYS the sampled local background of
+  // the original image (the "blend"). Neutral fallback only if sampling failed.
   const computeFill = useCallback((s: Shape): string => {
-    if (!blendRef.current) return BLACK;
     const orig = origDataRef.current;
-    if (!orig) return BLACK;
+    if (!orig) return FALLBACK_FILL;
     if (s.type === 'rect') return sampleRectFill(orig, s.x, s.y, s.w, s.h);
     return sampleBrushFill(orig, s.points, s.thickness);
   }, []);
 
   // ---- drawing primitives ------------------------------------------------
   const drawShape = useCallback((ctx: CanvasRenderingContext2D, s: Shape) => {
-    const color = s.fill || BLACK;
+    const color = s.fill || FALLBACK_FILL;
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
     if (s.type === 'rect') {
@@ -323,7 +457,19 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.setTransform(scale, 0, 0, scale, v.ox, v.oy);
     ctx.drawImage(base, 0, 0);
-    if (draftRef.current) drawShape(ctx, draftRef.current);
+    // Detected-word hints (faint) whenever the Tap-words tool is active.
+    if (toolRef.current === 'words' && ocrWordsRef.current.length) {
+      drawDetectedBoxes(ctx, ocrWordsRef.current, scale);
+    }
+    // In-progress manual shape + its drawing-time outline affordance.
+    if (draftRef.current) {
+      drawShape(ctx, draftRef.current);
+      if (drawingRef.current) drawActiveOutline(ctx, draftRef.current, scale);
+    }
+    // Live tap/drag word selection preview (before it commits to shapes).
+    if (wordSelBoxesRef.current.length || wordSelRectRef.current) {
+      drawSelectionBoxes(ctx, wordSelBoxesRef.current, wordSelRectRef.current, scale);
+    }
   }, [drawShape]);
 
   const layout = useCallback(() => {
@@ -356,6 +502,13 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     shapesRef.current = [];
     draftRef.current = null;
     setShapeCount(0);
+    // A new source image invalidates any prior OCR result.
+    ocrWordsRef.current = [];
+    ocrStartedRef.current = false;
+    wordSelStartRef.current = null;
+    wordSelBoxesRef.current = [];
+    wordSelRectRef.current = null;
+    setOcrState('idle');
 
     const img = new Image();
     // same-origin seed SVGs -> canvas is NOT tainted, so toDataURL works.
@@ -579,9 +732,9 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
 
   const beginDraw = useCallback((p: Point) => {
     if (toolRef.current === 'rect') {
-      draftRef.current = { type: 'rect', x: p.x, y: p.y, w: 0, h: 0, fill: BLACK };
+      draftRef.current = { type: 'rect', x: p.x, y: p.y, w: 0, h: 0, fill: FALLBACK_FILL };
     } else {
-      const brush: Shape = { type: 'brush', points: [p], thickness: thicknessRef.current, fill: BLACK };
+      const brush: Shape = { type: 'brush', points: [p], thickness: thicknessRef.current, fill: FALLBACK_FILL };
       brush.fill = computeFill(brush);
       draftRef.current = brush;
     }
@@ -635,6 +788,127 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     drawingRef.current = false;
   }, [renderDisplay]);
 
+  // ---- OCR tap/drag-to-redact -------------------------------------------
+  // Lazily OCR the CURRENT source image (natural size => boxes are already in
+  // image space). Runs at most once per image; heavy, so we show a spinner.
+  const ensureOcr = useCallback(async () => {
+    if (ocrStartedRef.current) return;
+    ocrStartedRef.current = true;
+    const img = imgRef.current;
+    if (!img) { ocrStartedRef.current = false; return; }
+    setOcrState('loading');
+    try {
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      // Rasterize to a natural-size canvas (handles SVG seeds; guarantees the
+      // OCR coordinate space equals the editor's image space).
+      let src: HTMLCanvasElement | HTMLImageElement = img;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const cctx = canvas.getContext('2d');
+      if (cctx) { cctx.drawImage(img, 0, 0, w, h); src = canvas; }
+      const res = await runOcr(src);
+      ocrWordsRef.current = res.words;
+      setOcrState(res.words.length ? 'ready' : 'empty');
+      renderDisplay();
+    } catch (err) {
+      console.warn('[editor] OCR failed:', err);
+      ocrWordsRef.current = [];
+      setOcrState('error');
+    }
+  }, [renderDisplay]);
+
+  // Kick off OCR the first time the Tap-words tool is selected for this image.
+  useEffect(() => {
+    if (tool === 'words') void ensureOcr();
+  }, [tool, ensureOcr]);
+
+  /** Boxes to tap/drag against, per current granularity (word vs letter). */
+  const collectBoxes = useCallback((): OcrBox[] => {
+    const words = ocrWordsRef.current;
+    if (granularityRef.current === 'letter') {
+      const out: OcrBox[] = [];
+      for (const w of words) {
+        if (w.symbols.length) out.push(...w.symbols);
+        else out.push(w); // no symbol boxes -> fall back to the word box
+      }
+      return out;
+    }
+    return words;
+  }, []);
+
+  const beginWordSelect = useCallback((p: Point) => {
+    wordSelStartRef.current = p;
+    wordSelBoxesRef.current = [];
+    wordSelRectRef.current = null;
+    renderDisplay();
+  }, [renderDisplay]);
+
+  const moveWordSelect = useCallback((cur: Point) => {
+    const start = wordSelStartRef.current;
+    if (!start) return;
+    const r = {
+      x0: Math.min(start.x, cur.x),
+      y0: Math.min(start.y, cur.y),
+      x1: Math.max(start.x, cur.x),
+      y1: Math.max(start.y, cur.y),
+    };
+    wordSelRectRef.current = { x: r.x0, y: r.y0, w: r.x1 - r.x0, h: r.y1 - r.y0 };
+    const moved = r.x1 - r.x0 > 3 || r.y1 - r.y0 > 3;
+    if (moved) {
+      wordSelBoxesRef.current = collectBoxes().filter((b) => boxIntersectsRect(b, r));
+    } else {
+      const hits = collectBoxes().filter((b) => pointInBox(start, b, 2));
+      wordSelBoxesRef.current = hits.length ? [hits.reduce((a, b) => (boxArea(b) < boxArea(a) ? b : a))] : [];
+    }
+    renderDisplay();
+  }, [collectBoxes, renderDisplay]);
+
+  const commitWordSelection = useCallback(() => {
+    const start = wordSelStartRef.current;
+    wordSelStartRef.current = null;
+    let boxes = wordSelBoxesRef.current;
+    // Plain tap that produced no drag-selection: redact the tightest box under it.
+    if (!boxes.length && start) {
+      const hits = collectBoxes().filter((b) => pointInBox(start, b, 2));
+      if (hits.length) boxes = [hits.reduce((a, b) => (boxArea(b) < boxArea(a) ? b : a))];
+    }
+    wordSelBoxesRef.current = [];
+    wordSelRectRef.current = null;
+    if (!boxes.length) { renderDisplay(); return; }
+
+    // Honor the per-round stroke limit: only add up to the remaining budget.
+    let allowed = boxes;
+    if (max != null) {
+      const room = Math.max(0, max - shapesRef.current.length);
+      allowed = boxes.slice(0, room);
+    }
+    if (!allowed.length) { renderDisplay(); return; }
+
+    const base = baseRef.current;
+    const ctx = base?.getContext('2d');
+    const pad = 2;
+    const added: Shape[] = [];
+    for (const b of allowed) {
+      const shape: Shape = {
+        type: 'rect',
+        x: b.x0 - pad,
+        y: b.y0 - pad,
+        w: b.x1 - b.x0 + pad * 2,
+        h: b.y1 - b.y0 + pad * 2,
+        fill: FALLBACK_FILL,
+      };
+      shape.fill = computeFill(shape); // blend-sample from the original image
+      added.push(shape);
+      if (ctx) drawShape(ctx, shape);
+    }
+    shapesRef.current = [...shapesRef.current, ...added];
+    setShapeCount(shapesRef.current.length);
+    renderDisplay();
+    persist();
+  }, [collectBoxes, computeFill, drawShape, max, renderDisplay, persist]);
+
   const interactive = loaded && !disabled && !submitted;
   const interactiveRef = useRef(interactive);
   useEffect(() => { interactiveRef.current = interactive; }, [interactive]);
@@ -668,12 +942,18 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
       return;
     }
 
+    if (toolRef.current === 'words') {
+      gestureRef.current = { mode: 'words' };
+      beginWordSelect(toImage(e.clientX, e.clientY, false));
+      return;
+    }
+
     // Stroke-limit: block starting a NEW shape once the cap is reached.
     if (atLimitRef.current) return;
 
     gestureRef.current = { mode: 'draw' };
     beginDraw(toImage(e.clientX, e.clientY));
-  }, [loaded, cancelDraft, startPinch, eraseAt, toImage, atLimitRef, beginDraw]);
+  }, [loaded, cancelDraft, startPinch, eraseAt, toImage, atLimitRef, beginDraw, beginWordSelect]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!pointersRef.current.has(e.pointerId)) return;
@@ -681,11 +961,12 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     const mode = gestureRef.current.mode;
     if (mode === 'pinch') { e.preventDefault(); doPinch(); return; }
     if (mode === 'pan') { e.preventDefault(); doPan(e.clientX, e.clientY); return; }
+    if (mode === 'words') { e.preventDefault(); moveWordSelect(toImage(e.clientX, e.clientY, false)); return; }
     if (mode === 'draw' && drawingRef.current) {
       e.preventDefault();
       moveDraw(toImage(e.clientX, e.clientY));
     }
-  }, [doPinch, doPan, moveDraw, toImage]);
+  }, [doPinch, doPan, moveWordSelect, moveDraw, toImage]);
 
   const endPointer = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!pointersRef.current.has(e.pointerId)) return;
@@ -697,6 +978,11 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
 
     if (wasMode === 'draw') {
       if (drawingRef.current) commitDraft();
+      gestureRef.current = { mode: 'none' };
+      return;
+    }
+    if (wasMode === 'words') {
+      commitWordSelection();
       gestureRef.current = { mode: 'none' };
       return;
     }
@@ -717,7 +1003,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
       return;
     }
     gestureRef.current = { mode: 'none' };
-  }, [commitDraft, startPinch]);
+  }, [commitDraft, commitWordSelection, startPinch]);
 
   // ---- toolbar actions ---------------------------------------------------
   const undo = useCallback(() => {
@@ -774,6 +1060,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         <div className="flex rounded-lg overflow-hidden border border-white/10">
           <ToolButton active={tool === 'rect'} onClick={() => setTool('rect')} disabled={!interactive} label="▭ Box" />
           <ToolButton active={tool === 'brush'} onClick={() => setTool('brush')} disabled={!interactive} label="✎ Brush" />
+          <ToolButton active={tool === 'words'} onClick={() => setTool('words')} disabled={!interactive} label="🔤 Tap text" />
           <ToolButton active={tool === 'eraser'} onClick={() => setTool('eraser')} disabled={!interactive} label="⌫ Eraser" />
         </div>
 
@@ -791,19 +1078,30 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
           <span className="tabular-nums w-6 text-right">{thickness}</span>
         </label>
 
-        <button
-          type="button"
-          onClick={() => setBlend((b) => !b)}
-          disabled={!interactive}
-          title={blend ? 'Redactions blend with the background' : 'Redactions are solid black'}
-          className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors disabled:opacity-40 ${
-            blend
-              ? 'bg-grief/20 border-grief/40 text-white'
-              : 'bg-panel2 border-white/10 text-white/80 hover:bg-white/10'
-          }`}
-        >
-          {blend ? '🎨 Blend' : '■ Black'}
-        </button>
+        {tool === 'words' && (
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg overflow-hidden border border-white/10 text-sm">
+              <button
+                type="button"
+                onClick={() => setGranularity('word')}
+                disabled={!interactive}
+                className={`px-2.5 py-2 font-medium transition-colors disabled:opacity-40 ${granularity === 'word' ? 'bg-grief text-white' : 'bg-panel2 text-white/80 hover:bg-white/10'}`}
+              >Words</button>
+              <button
+                type="button"
+                onClick={() => setGranularity('letter')}
+                disabled={!interactive}
+                className={`px-2.5 py-2 font-medium transition-colors disabled:opacity-40 ${granularity === 'letter' ? 'bg-grief text-white' : 'bg-panel2 text-white/80 hover:bg-white/10'}`}
+              >Letters</button>
+            </div>
+            <span className="text-xs text-white/50 whitespace-nowrap">
+              {ocrState === 'loading' && '🔎 Detecting text…'}
+              {ocrState === 'ready' && `${ocrWordsRef.current.length} words — tap or drag`}
+              {ocrState === 'empty' && 'No text detected'}
+              {ocrState === 'error' && 'Text detection failed'}
+            </span>
+          </div>
+        )}
 
         <button
           type="button"
@@ -867,7 +1165,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         )}
       </div>
       <p className="text-[11px] text-white/40 -mt-1">
-        Pinch or scroll to zoom · two-finger drag (or Space/middle-drag) to pan · {tool === 'eraser' ? 'tap a redaction to remove it' : 'Shift / 📐 for straight lines & squares'}
+        Pinch or scroll to zoom · two-finger drag (or Space/middle-drag) to pan · {tool === 'eraser' ? 'tap a redaction to remove it' : tool === 'words' ? 'tap a word — or drag across several — to black it out' : 'Shift / 📐 for straight lines & squares'}
       </p>
 
       {/* Submit */}
@@ -889,8 +1187,8 @@ function ToolButton({ active, onClick, disabled, label }: { active: boolean; onC
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40 ${
-        active ? 'bg-grief text-white' : 'bg-panel2 text-white/80 hover:bg-white/10'
+      className={`px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-40 ${
+        active ? 'bg-grief text-white shadow-glow-grief' : 'bg-panel2 text-white/80 hover:bg-white/10'
       }`}
     >
       {label}
