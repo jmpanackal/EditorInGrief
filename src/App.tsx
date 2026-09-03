@@ -4,6 +4,7 @@ import { JoinScreen } from './components/JoinScreen';
 import { Lobby } from './components/Lobby';
 import { RoundView } from './components/RoundView';
 import { Reveal } from './components/Reveal';
+import { Voting } from './components/Voting';
 import { Scoreboard } from './components/Scoreboard';
 import { dateline } from './lib/format';
 
@@ -69,6 +70,8 @@ function PhaseView({ room, clockOffsetMs }: { room: ReturnType<typeof useRoom>; 
       return <RoundView room={room} clockOffsetMs={clockOffsetMs} />;
     case 'reveal':
       return <Reveal room={room} />;
+    case 'voting':
+      return <Voting room={room} />;
     case 'scoreboard':
       return <Scoreboard room={room} />;
     default:

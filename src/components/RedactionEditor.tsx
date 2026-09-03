@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { runOcr, type OcrBox, type OcrWord } from '../lib/ocr';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { disposeOcr, runOcr, type OcrBox, type OcrWord } from '../lib/ocr';
 
 /**
  * RedactionEditor — the core mechanic.
@@ -377,6 +377,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   const [shapeCount, setShapeCount] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [zoomPct, setZoomPct] = useState(100);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const brushHoverRef = useRef<Point | null>(null);
 
   // ---- OCR tap/drag-to-redact (assist on top of manual tools) -----------
   const ocrWordsRef = useRef<OcrWord[]>([]);
@@ -536,6 +538,10 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     // Live tap/drag word selection preview (before it commits to shapes).
     if (wordSelBoxesRef.current.length || wordSelRectRef.current) {
       drawSelectionBoxes(ctx, wordSelBoxesRef.current, wordSelRectRef.current, scale);
+    }
+    // Display-only Marker cursor ring — never written to the editing canvas.
+    if (toolRef.current === 'brush' && brushHoverRef.current && !drawingRef.current) {
+      drawBrushHover(ctx, brushHoverRef.current, thicknessRef.current, scale);
     }
   }, [drawShape]);
 
@@ -896,9 +902,25 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     } catch (err) {
       console.warn('[editor] OCR failed:', err);
       ocrWordsRef.current = [];
+      // Let a deliberate retry start a fresh recognition attempt rather than
+      // leaving this browser stuck behind a failed worker request.
+      ocrStartedRef.current = false;
       setOcrState('error');
     }
   }, [renderDisplay]);
+
+  const retryOcr = useCallback(() => {
+    if (ocrState === 'loading') return;
+    void (async () => {
+      // OCR runs in each player's browser. Recreating the worker clears a
+      // transient CDN/worker failure without affecting anyone else in the room.
+      await disposeOcr();
+      ocrWordsRef.current = [];
+      ocrStartedRef.current = false;
+      setOcrState('idle');
+      await ensureOcr();
+    })();
+  }, [ensureOcr, ocrState]);
 
   // Kick off OCR the first time the Tap-words tool is selected for this image.
   useEffect(() => {
@@ -1067,6 +1089,13 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   }, [loaded, cancelDraft, startPinch, eraseAt, toImage, atLimitRef, beginDraw, beginWordSelect]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (toolRef.current === 'brush' && interactiveRef.current && e.pointerType !== 'touch' && !drawingRef.current) {
+      const point = toImage(e.clientX, e.clientY, false);
+      const img = imgRef.current;
+      const inImage = !!img && point.x >= 0 && point.y >= 0 && point.x <= img.naturalWidth && point.y <= img.naturalHeight;
+      brushHoverRef.current = inImage ? point : null;
+      renderDisplay();
+    }
     if (!pointersRef.current.has(e.pointerId)) return;
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const mode = gestureRef.current.mode;
@@ -1077,7 +1106,13 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
       e.preventDefault();
       moveDraw(toImage(e.clientX, e.clientY));
     }
-  }, [doPinch, doPan, moveWordSelect, moveDraw, toImage]);
+  }, [doPinch, doPan, moveWordSelect, moveDraw, toImage, renderDisplay]);
+
+  const clearBrushHover = useCallback(() => {
+    if (!brushHoverRef.current) return;
+    brushHoverRef.current = null;
+    renderDisplay();
+  }, [renderDisplay]);
 
   const endPointer = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!pointersRef.current.has(e.pointerId)) return;
@@ -1163,6 +1198,11 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   useEffect(() => { if (submitted) clearSaved(); }, [submitted, clearSaved]);
 
   const remaining = max != null ? Math.max(0, max - shapeCount) : null;
+  const limitTone = remaining === 0
+    ? 'bg-grief text-paper'
+    : max != null && remaining != null && remaining <= Math.ceil(max / 3)
+      ? 'bg-[#e0a21a] text-ink'
+      : 'bg-papercard text-ink';
   const cursor = !interactive
     ? 'default'
     : spaceDown
@@ -1174,8 +1214,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   const wordsStatus =
     ocrState === 'loading' ? '🔎 Reading the copy…'
     : ocrState === 'ready' ? `${ocrWordsRef.current.length} words · tap to toggle, drag to hide`
-    : ocrState === 'empty' ? 'No text found — use Box / Brush'
-    : ocrState === 'error' ? 'Reader jammed — use Box / Brush'
+    : ocrState === 'empty' ? 'No text found — retry or use Box / Brush'
+    : ocrState === 'error' ? 'Reader paused — retry or use Box / Brush'
     : '';
 
   const controlsHint =
@@ -1183,84 +1223,76 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-[3px] overflow-hidden border-2 border-ink">
-          <ToolButton active={tool === 'rect'} onClick={() => setTool('rect')} disabled={!interactive} label="▭ Box" />
-          <ToolButton active={tool === 'brush'} onClick={() => setTool('brush')} disabled={!interactive} label="✎ Marker" />
-          <ToolButton active={tool === 'words'} onClick={() => setTool('words')} disabled={!interactive} label="🔤 Tap text" />
-          <ToolButton active={tool === 'eraser'} onClick={() => setTool('eraser')} disabled={!interactive} label="⌫ Eraser" />
-        </div>
-
-        {tool === 'brush' && (
-          <label className="flex items-center gap-2 text-sm px-2.5 py-1.5 rounded-[3px] card-inset">
-            <span className="whitespace-nowrap kicker text-[10px]">Nib</span>
-            <input
-              type="range"
-              min={MIN_THICKNESS}
-              max={MAX_THICKNESS}
-              value={thickness}
-              disabled={!interactive}
-              onChange={(e) => setThickness(Number(e.target.value))}
-              className="accent-grief w-24 sm:w-28"
-            />
-            <span className="tabular-nums w-6 text-right font-semibold">{thickness}</span>
-          </label>
-        )}
-
-        {tool === 'words' && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex rounded-[3px] overflow-hidden border-2 border-ink text-sm">
-              <button
-                type="button"
-                onClick={() => setGranularity('word')}
-                disabled={!interactive}
-                className={`px-2.5 py-1.5 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 ${granularity === 'word' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'}`}
-              >Words</button>
-              <button
-                type="button"
-                onClick={() => setGranularity('letter')}
-                disabled={!interactive}
-                className={`px-2.5 py-1.5 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 border-l-2 border-ink ${granularity === 'letter' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'}`}
-              >Letters</button>
+      {/* Tool options stay directly beneath their parent control. View and
+          history actions form a distinct utility group on the right. */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+        <div className="flex flex-col gap-2 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-[3px] overflow-hidden border-2 border-ink w-fit">
+              <ToolButton active={tool === 'rect'} onClick={() => setTool('rect')} disabled={!interactive} label="▭ Box" />
+              <ToolButton active={tool === 'brush'} onClick={() => setTool('brush')} disabled={!interactive} label="✎ Marker" />
+              <ToolButton active={tool === 'words'} onClick={() => setTool('words')} disabled={!interactive} label="🔤 Tap text" />
+              <ToolButton active={tool === 'eraser'} onClick={() => setTool('eraser')} disabled={!interactive} label="⌫ Eraser" />
             </div>
-            <span className="text-xs text-ink2 whitespace-nowrap">{wordsStatus}</span>
+            {remaining != null && (
+              <span className={`h-10 px-3 inline-flex items-center justify-center rounded-[3px] border-2 border-ink font-slab font-bold uppercase tracking-wide text-sm whitespace-nowrap ${limitTone}`}>
+                {remaining} redaction{remaining === 1 ? '' : 's'} left
+              </span>
+            )}
           </div>
-        )}
 
-        <button
-          type="button"
-          onClick={() => setConstrain((c) => !c)}
-          disabled={!interactive}
-          title="Constrain: perfect squares (Box) / straight lines (Marker). Hold Shift on desktop."
-          className={`px-3 py-2 text-sm font-slab font-bold uppercase tracking-wide rounded-[3px] border-2 border-ink transition-colors disabled:opacity-40 ${
-            constrain ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'
-          }`}
-        >
-          📐 Straight
-        </button>
+          {tool === 'brush' && (
+            <ToolModifier anchorClassName="ml-[7.2rem]">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-sm px-2.5 py-1.5 rounded-[3px] card-inset">
+                  <span className="whitespace-nowrap kicker text-[10px]">Brush size</span>
+                  <input type="range" min={MIN_THICKNESS} max={MAX_THICKNESS} value={thickness} disabled={!interactive} onChange={(e) => setThickness(Number(e.target.value))} className="accent-grief w-24 sm:w-28" />
+                  <span className="tabular-nums w-6 text-right font-semibold">{thickness}</span>
+                </label>
+                <ConstrainButton label="Straight brush" constrain={constrain} interactive={interactive} onClick={() => setConstrain((c) => !c)} />
+              </div>
+            </ToolModifier>
+          )}
 
-        <div className="flex-1" />
+          {tool === 'rect' && (
+            <ToolModifier anchorClassName="ml-[2.05rem]">
+              <ConstrainButton label="Perfect square" constrain={constrain} interactive={interactive} onClick={() => setConstrain((c) => !c)} />
+            </ToolModifier>
+          )}
 
-        {/* Zoom: 100% = default readable fit-width (not “entire image fits”). */}
-        <div className="flex items-center rounded-[3px] overflow-hidden border-2 border-ink text-sm">
-          <button type="button" onClick={() => zoomButton(1 / 1.25)} disabled={!loaded} className="px-2.5 py-2 bg-papercard text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom out">−</button>
-          <button type="button" onClick={resetView} disabled={!loaded} className="px-2 py-2 bg-papercard text-ink2 hover:bg-paper2 disabled:opacity-40 tabular-nums w-14 border-x-2 border-ink" title="Reset to default (fit width)">{zoomPct}%</button>
-          <button type="button" onClick={() => zoomButton(1.25)} disabled={!loaded} className="px-2.5 py-2 bg-papercard text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom in">+</button>
+          {tool === 'words' && (
+            <ToolModifier anchorClassName="ml-[13.5rem]">
+              <div className="flex items-center gap-2 flex-wrap card-inset px-2 py-1.5 w-fit">
+                <div className="flex rounded-[3px] overflow-hidden border-2 border-ink text-sm">
+                  <button type="button" onClick={() => setGranularity('word')} disabled={!interactive} className={`px-2.5 py-1.5 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 ${granularity === 'word' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'}`}>Words</button>
+                  <button type="button" onClick={() => setGranularity('letter')} disabled={!interactive} className={`px-2.5 py-1.5 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 border-l-2 border-ink ${granularity === 'letter' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'}`}>Letters</button>
+                </div>
+                <span className="text-xs text-ink2 whitespace-nowrap">{wordsStatus}</span>
+                {(ocrState === 'error' || ocrState === 'empty') && (
+                  <button type="button" onClick={retryOcr} disabled={!interactive} className="btn-secondary !px-2 !py-1 text-xs whitespace-nowrap">
+                    ↻ Retry reader
+                  </button>
+                )}
+              </div>
+            </ToolModifier>
+          )}
         </div>
 
-        {/* Subtle controls hint (unobtrusive info affordance) */}
-        <button
-          type="button"
-          title={controlsHint}
-          aria-label="Editor controls help"
-          className="w-8 h-8 grid place-items-center rounded-full border-2 border-ink bg-papercard text-ink font-display font-bold text-sm hover:bg-paper2 transition-colors"
-        >
-          i
-        </button>
-
-        <button onClick={undo} disabled={!interactive || shapeCount === 0} className="btn-secondary !py-2">↶ Undo</button>
-        <button onClick={reset} disabled={!interactive || shapeCount === 0} className="btn-secondary !py-2">Reset</button>
+        <div className="flex flex-col items-end gap-2 ml-auto">
+          <div className="flex h-11 items-center rounded-[3px] overflow-hidden border-2 border-ink bg-papercard font-slab font-bold text-sm shadow-[2px_2px_0_rgba(26,26,26,0.18)]">
+            <button type="button" onClick={() => zoomButton(1 / 1.25)} disabled={!loaded} className="h-full w-10 text-lg text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom out" aria-label="Zoom out">−</button>
+            <button type="button" onClick={resetView} disabled={!loaded} className="h-full w-16 text-ink2 hover:bg-paper2 disabled:opacity-40 tabular-nums border-x-2 border-ink" title="Reset to default (fit width)">{zoomPct}</button>
+            <button type="button" onClick={() => zoomButton(1.25)} disabled={!loaded} className="h-full w-10 text-lg text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom in" aria-label="Zoom in">+</button>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={undo} disabled={!interactive || shapeCount === 0} className="btn-secondary !h-11 !py-0">↶ Undo</button>
+            <button onClick={reset} disabled={!interactive || shapeCount === 0} className="btn-secondary !h-11 !py-0">Reset</button>
+            <div className="relative">
+              <button type="button" onClick={() => setHelpOpen((open) => !open)} aria-expanded={helpOpen} aria-label="Editor controls help" className="btn-secondary !h-11 !py-0">ⓘ Help</button>
+              {helpOpen && <div role="tooltip" className="absolute z-20 right-0 top-12 w-[min(22rem,80vw)] card p-3 text-left shadow-clip text-xs leading-relaxed text-ink2"><div className="kicker text-[10px] mb-1">Editor controls</div>{controlsHint.split('\n').map((line) => <p key={line}>{line}</p>)}</div>}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Canvas viewport — tall enough on desktop to show more of long screenshots;
@@ -1274,6 +1306,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
           ref={displayRef}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
+          onPointerLeave={clearBrushHover}
           onPointerUp={endPointer}
           onPointerCancel={endPointer}
           className="block w-full h-full"
@@ -1283,11 +1316,6 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         <canvas ref={baseRef} className="hidden" />
         {!loaded && (
           <div className="absolute inset-0 grid place-items-center text-ink2 text-sm">Setting the type…</div>
-        )}
-        {remaining != null && (
-          <div className={`absolute top-2 left-2 pill ${atLimit ? 'bg-grief text-paper border-ink' : ''}`}>
-            {remaining} redaction{remaining === 1 ? '' : 's'} left
-          </div>
         )}
         {submitted && (
           <div className="absolute inset-0 grid place-items-center bg-paper/70 backdrop-blur-[1px]">
@@ -1327,5 +1355,53 @@ function ToolButton({ active, onClick, disabled, label }: { active: boolean; onC
     >
       {label}
     </button>
+  );
+}
+
+function ConstrainButton({ label, constrain, interactive, onClick }: { label: string; constrain: boolean; interactive: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!interactive}
+      aria-pressed={constrain}
+      className={`px-3 py-2 text-sm font-slab font-bold uppercase tracking-wide rounded-[3px] border-2 border-ink transition-colors disabled:opacity-40 ${
+        constrain ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'
+      }`}
+    >
+      📐 {label}
+    </button>
+  );
+}
+
+/** Non-destructive cursor ring: shows the Marker diameter before drawing. */
+function drawBrushHover(ctx: CanvasRenderingContext2D, p: Point, thickness: number, scale: number): void {
+  const radius = thickness / 2;
+  const dash = [5 / scale, 3 / scale];
+  ctx.save();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 2.4 / scale;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.72)';
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash(dash);
+  ctx.lineWidth = 1.4 / scale;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.96)';
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** A real branch from the selected tool to its contextual controls. The anchor
+    offsets match the fixed tool-button group above (Box, Marker, Tap Text). */
+function ToolModifier({ anchorClassName, children }: { anchorClassName: string; children: ReactNode }) {
+  return (
+    <div className={`relative w-fit pt-2 ${anchorClassName}`}>
+      <span className="absolute left-0 -top-2 h-4 border-l-2 border-ink" aria-hidden="true" />
+      <span className="absolute left-0 top-2 w-4 border-t-2 border-ink" aria-hidden="true" />
+      <div className="pl-4">{children}</div>
+    </div>
   );
 }

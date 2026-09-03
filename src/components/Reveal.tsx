@@ -12,8 +12,6 @@ export function Reveal({ room }: { room: RoomApi }) {
   const current = subs[idx];
   const owner = current ? state.players.find((p) => p.id === current.playerId) : null;
   const isLast = idx >= subs.length - 1;
-  const myVote = room.playerId ? round.votes[room.playerId] : undefined;
-  const canVote = round.votingEnabled && current && current.playerId !== room.playerId;
 
   if (subs.length === 0) {
     return (
@@ -38,13 +36,15 @@ export function Reveal({ room }: { room: RoomApi }) {
       </div>
 
       <div className="card p-4">
-        <div className="relative w-full flex justify-center rounded-[2px] overflow-hidden bg-paper2 border-2 border-ink">
+        <div className="relative mx-auto w-fit max-w-full rounded-[2px] overflow-hidden bg-paper2 border-2 border-ink">
           <img
             key={`${current.id}-${showOriginal}`}
             src={showOriginal ? source.imageUrl : current.editedImageUrl}
             alt={showOriginal ? 'Original source' : 'Redacted submission'}
-            className="max-w-full h-auto animate-pop"
-            style={{ maxHeight: '58vh' }}
+            className="block w-auto max-w-full object-contain animate-pop"
+            // Give small portrait screenshots a useful reading size. The image
+            // itself determines the frame width; the viewport guards wide shots.
+            style={{ height: 'min(58vh, 74vw)' }}
           />
           {showOriginal && <span className="absolute top-2 left-2 pill">uncensored proof</span>}
         </div>
@@ -61,22 +61,6 @@ export function Reveal({ room }: { room: RoomApi }) {
             👁 Hold to see original
           </button>
 
-          {round.votingEnabled && (
-            <>
-              <span className="pill">♥ {current.votesCount} vote{current.votesCount === 1 ? '' : 's'}</span>
-              {canVote && (
-                <button
-                  className={myVote === current.id ? 'btn-primary' : 'btn-secondary'}
-                  onClick={() => room.castVote(current.id)}
-                >
-                  {myVote === current.id ? '✓ Your pick' : '♥ Vote for this'}
-                </button>
-              )}
-              {!canVote && current.playerId === room.playerId && (
-                <span className="text-xs text-ink3 italic">(you can’t vote for your own)</span>
-              )}
-            </>
-          )}
         </div>
       </div>
 
@@ -97,9 +81,6 @@ export function Reveal({ room }: { room: RoomApi }) {
                     }`}
                   >
                     <img src={s.editedImageUrl} alt="" className="w-full h-16 object-cover object-top" />
-                    {round.votingEnabled && s.votesCount > 0 && (
-                      <span className="absolute bottom-0 right-0 text-[10px] px-1 bg-ink text-paper">♥{s.votesCount}</span>
-                    )}
                   </div>
                   <span className={`text-[11px] truncate max-w-full ${active ? 'text-grief font-bold' : 'text-ink3'}`}>
                     {p?.nickname ?? '—'}
@@ -115,15 +96,15 @@ export function Reveal({ room }: { room: RoomApi }) {
         <div className="flex items-center gap-2">
           <button className="btn-secondary" disabled={idx === 0} onClick={() => room.advanceReveal(-1)}>← Previous</button>
           {isLast ? (
-            <button className="btn-primary flex-1" onClick={room.showScoreboard}>
-              {round.votingEnabled ? 'Tally Votes →' : 'See Results →'}
+            <button className="btn-primary flex-1" onClick={round.votingEnabled ? room.beginVoting : room.showScoreboard}>
+              {round.votingEnabled ? 'Open ballot →' : 'See Results →'}
             </button>
           ) : (
             <button className="btn-primary flex-1" onClick={() => room.advanceReveal(1)}>Next →</button>
           )}
         </div>
       ) : (
-        <p className="text-center text-ink3 text-sm italic">The Editor is running the reveal.</p>
+        <p className="text-center text-ink3 text-sm italic">The Host is running the reveal.</p>
       )}
     </div>
   );

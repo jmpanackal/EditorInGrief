@@ -139,6 +139,7 @@ export type Phase =
   | 'countdown' // synced 3-2-1-GO before redaction; timer not yet running
   | 'round' // everyone redacting their own copy
   | 'reveal' // submissions revealed one at a time, synced to all
+  | 'voting' // all submissions shown together for a private ballot
   | 'scoreboard'; // between-round / end summary
 
 /**
@@ -156,12 +157,12 @@ export interface RoomState {
   roundNumber: number;
   /** The source chosen for the current/most-recent round (denormalized for clients). */
   currentSource: Source | null;
-  /**
-   * A source uploaded during the lobby pre-round window, previewed to everyone.
-   * When set, the next round uses it instead of pulling a random seed. Cleared
-   * back to null (revert to seed bank) when a round starts or the uploader clears it.
-   */
-  pendingSource: Source | null;
+  /** Screenshots filed by players for this session's upcoming rounds. */
+  pendingSources: Source[];
+  /** Each player can endorse one filed source; changing a vote replaces their old one. */
+  sourceVotes: Record<string, string>;
+  /** The host's explicit choice for the next round, if any. */
+  selectedSourceId: string | null;
   currentRound: Round | null;
   serverTime: number; // epoch ms at snapshot; lets clients correct for clock skew
 }
@@ -182,19 +183,22 @@ export type ClientMessage =
   | { type: 'createRoom'; nickname: string }
   | { type: 'joinRoom'; code: string; nickname: string }
   | { type: 'rejoin'; code: string; playerId: string } // reconnect support
+  | { type: 'removePlayer'; playerId: string } // host only
   | { type: 'setVoting'; enabled: boolean } // host only
   | { type: 'setRoundSettings'; settings: Partial<RoundSettings> } // host only
-  // Pre-round upload (Phase 3 pulled forward): any player may stage a screenshot
-  // as the next round's source. Image travels as a (downscaled) data URL through
-  // the same WS channel; server stores it in the in-memory source bank.
+  // Players can file multiple screenshots for later rounds. Image travels as a
+  // downscaled data URL through the same WS channel and lives for the session.
   | { type: 'uploadSource'; imageUrl: string; wordCount: number; ocrText: string | null }
-  | { type: 'clearSource' } // remove the staged upload; revert to seed bank
+  | { type: 'clearSource'; sourceId: string }
+  | { type: 'voteForSource'; sourceId: string }
+  | { type: 'selectSource'; sourceId: string | null } // host only
   | { type: 'startRound'; sourceId?: string } // host only; sourceId optional (else random from bank)
   | { type: 'submit'; roundId: string; editedImageUrl: string }
   | { type: 'advanceReveal'; direction?: 1 | -1 } // host only
+  | { type: 'beginVoting' } // host only; reveal -> ballot when voting is enabled
   | { type: 'forceReveal' } // host only; skip waiting (e.g. AFK during untimed)
   | { type: 'castVote'; submissionId: string } // when voting enabled
-  | { type: 'nextRound' } // host only; reveal -> scoreboard (tallies votes)
+  | { type: 'nextRound' } // host only; ballot/reveal -> scoreboard (tallies votes)
   | { type: 'returnToLobby' }; // host only; scoreboard/any -> lobby (fresh upload window)
 
 /** Messages sent FROM the server TO clients. */

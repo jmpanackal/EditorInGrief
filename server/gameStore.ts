@@ -152,7 +152,9 @@ export class GameStore {
       roundSettings: { ...DEFAULT_ROUND_SETTINGS },
       roundNumber: 0,
       currentSource: null,
-      pendingSource: null,
+      pendingSources: [],
+      sourceVotes: {},
+      selectedSourceId: null,
       currentRound: null,
       serverTime: Date.now(),
     };
@@ -170,7 +172,6 @@ export class GameStore {
     const playerId = randomId('p');
     const player: Player = { id: playerId, nickname: cleanNick(nickname), isHost: false, connected: true, score: 0 };
     room.state.players.push(player);
-    this.broadcast(room.state.code);
     return { code: room.state.code, playerId };
   }
 
@@ -190,8 +191,53 @@ export class GameStore {
       clearTimeout(room.hostGraceTimer);
       room.hostGraceTimer = undefined;
     }
-    this.broadcast(room.state.code);
     return { code: room.state.code, playerId };
+  }
+
+  /** Host-only cleanup for duplicate/abandoned player slots. */
+  removePlayer(code: string, hostId: string, targetId: string): void {
+    const room = this.requireHost(code, hostId);
+    if (targetId === hostId || targetId === room.state.hostId) {
+      throw new GameError('The Host cannot be removed from the room.');
+    }
+    if (!room.state.players.some((player) => player.id === targetId)) {
+      throw new GameError('That player is no longer in the room.');
+    }
+
+    room.state.players = room.state.players.filter((player) => player.id !== targetId);
+    const disconnectTimer = room.disconnectTimers.get(targetId);
+    if (disconnectTimer) clearTimeout(disconnectTimer);
+    room.disconnectTimers.delete(targetId);
+
+    const round = room.state.currentRound;
+    if (round) {
+      const removedSubmissionIds = new Set(
+        round.submissions.filter((submission) => submission.playerId === targetId).map((submission) => submission.id),
+      );
+      round.submissions = round.submissions.filter((submission) => submission.playerId !== targetId);
+      for (const [voterId, submissionId] of Object.entries(round.votes)) {
+        if (voterId === targetId || removedSubmissionIds.has(submissionId)) delete round.votes[voterId];
+      }
+      for (const submission of round.submissions) submission.votesCount = 0;
+      for (const chosenId of Object.values(round.votes)) {
+        const chosen = round.submissions.find((submission) => submission.id === chosenId);
+        if (chosen) chosen.votesCount += 1;
+      }
+    }
+
+    const removedSourceIds = new Set(
+      room.state.pendingSources.filter((source) => source.uploadedBy === targetId).map((source) => source.id),
+    );
+    room.state.pendingSources = room.state.pendingSources.filter((source) => source.uploadedBy !== targetId);
+    for (const sourceId of removedSourceIds) this.sources.delete(sourceId);
+    for (const [voterId, sourceId] of Object.entries(room.state.sourceVotes)) {
+      if (voterId === targetId || removedSourceIds.has(sourceId)) delete room.state.sourceVotes[voterId];
+    }
+    if (room.state.selectedSourceId && removedSourceIds.has(room.state.selectedSourceId)) {
+      room.state.selectedSourceId = null;
+    }
+
+    this.maybeAutoReveal(room);
   }
 
   markDisconnected(code: string, playerId: string): void {
@@ -269,8 +315,8 @@ export class GameStore {
   }
 
   // -------------------------------------------------------------------------
-  // Source upload (pre-round window). Any player in the lobby may stage a
-  // screenshot; it becomes the next round's source. Stored in-memory only.
+  // Source filing (pre-round window). Every player can add screenshots for the
+  // session; the host selects a source or lets the room's votes decide.
   // -------------------------------------------------------------------------
   uploadSource(
     code: string,
@@ -301,20 +347,46 @@ export class GameStore {
       timesUsed: 0,
     };
     this.sources.set(source.id, source);
-    room.state.pendingSource = { ...source };
+    room.state.pendingSources.push({ ...source });
     this.broadcast(room.state.code);
   }
 
-  clearSource(code: string, playerId: string): void {
+  clearSource(code: string, playerId: string, sourceId: string): void {
     const room = this.requireRoom(code);
     const player = room.state.players.find((p) => p.id === playerId);
     if (!player) return;
-    const pending = room.state.pendingSource;
-    if (pending) {
-      this.sources.delete(pending.id);
-      room.state.pendingSource = null;
-      this.broadcast(room.state.code);
+    if (room.state.phase !== 'lobby') throw new GameError('You can only remove sources in the lobby.');
+    const pending = room.state.pendingSources.find((source) => source.id === sourceId);
+    if (!pending) return;
+    if (pending.uploadedBy !== playerId && room.state.hostId !== playerId) {
+      throw new GameError('You can only remove your own filed image.');
     }
+    this.sources.delete(pending.id);
+    room.state.pendingSources = room.state.pendingSources.filter((source) => source.id !== sourceId);
+    for (const [voterId, votedId] of Object.entries(room.state.sourceVotes)) {
+      if (votedId === sourceId) delete room.state.sourceVotes[voterId];
+    }
+    if (room.state.selectedSourceId === sourceId) room.state.selectedSourceId = null;
+    this.broadcast(room.state.code);
+  }
+
+  voteForSource(code: string, playerId: string, sourceId: string): void {
+    const room = this.requireRoom(code);
+    if (room.state.phase !== 'lobby') throw new GameError('Vote for the next image while in the lobby.');
+    if (!room.state.players.some((p) => p.id === playerId)) throw new GameError('That player is no longer in the room.');
+    if (!room.state.pendingSources.some((source) => source.id === sourceId)) throw new GameError('That image is no longer available.');
+    room.state.sourceVotes[playerId] = sourceId;
+    this.broadcast(room.state.code);
+  }
+
+  selectSource(code: string, playerId: string, sourceId: string | null): void {
+    const room = this.requireHost(code, playerId);
+    if (room.state.phase !== 'lobby') throw new GameError('Choose the next image while in the lobby.');
+    if (sourceId != null && !room.state.pendingSources.some((source) => source.id === sourceId)) {
+      throw new GameError('That image is no longer available.');
+    }
+    room.state.selectedSourceId = sourceId;
+    this.broadcast(room.state.code);
   }
 
   // -------------------------------------------------------------------------
@@ -358,9 +430,12 @@ export class GameStore {
     room.state.currentSource = { ...source };
     room.state.roundNumber += 1;
     room.state.phase = 'countdown';
-    // A staged upload is consumed by the round it feeds; revert to seed bank next.
-    if (room.state.pendingSource && room.state.pendingSource.id === source.id) {
-      room.state.pendingSource = null;
+    // Keep filed sources around for later rounds; only clear the one-shot choice.
+    room.state.selectedSourceId = null;
+    // A vote has done its job once that image is played. Votes for the remaining
+    // shelf stay intact, making it easy to queue up later rounds.
+    for (const [voterId, votedId] of Object.entries(room.state.sourceVotes)) {
+      if (votedId === source.id) delete room.state.sourceVotes[voterId];
     }
 
     // Synced pre-round countdown, then begin redaction + deadline timer.
@@ -408,6 +483,15 @@ export class GameStore {
     this.broadcast(room.state.code);
   }
 
+  /** The reveal is presentation-only. The host explicitly opens the ballot after it. */
+  beginVoting(code: string, playerId: string): void {
+    const room = this.requireHost(code, playerId);
+    const round = room.state.currentRound;
+    if (!round || room.state.phase !== 'reveal' || !round.votingEnabled) return;
+    room.state.phase = 'voting';
+    this.broadcast(room.state.code);
+  }
+
   /** Host skips waiting for remaining players (untimed AFK escape hatch). */
   forceReveal(code: string, playerId: string): void {
     const room = this.requireHost(code, playerId);
@@ -419,7 +503,7 @@ export class GameStore {
   castVote(code: string, playerId: string, submissionId: string): void {
     const room = this.requireRoom(code);
     const round = room.state.currentRound;
-    if (!round || room.state.phase !== 'reveal' || !round.votingEnabled) return;
+    if (!round || room.state.phase !== 'voting' || !round.votingEnabled) return;
     const target = round.submissions.find((s) => s.id === submissionId);
     if (!target) return;
     if (target.playerId === playerId) return; // can't vote for yourself
@@ -433,11 +517,12 @@ export class GameStore {
     this.broadcast(room.state.code);
   }
 
-  /** From reveal -> scoreboard: tally this round's votes into running scores. */
+  /** From the ballot (or a no-voting reveal) -> scoreboard: tally this round. */
   showScoreboard(code: string, playerId: string): void {
     const room = this.requireHost(code, playerId);
     const round = room.state.currentRound;
-    if (!round || room.state.phase !== 'reveal') return;
+    if (!round || (room.state.phase !== 'reveal' && room.state.phase !== 'voting')) return;
+    if (round.votingEnabled && room.state.phase !== 'voting') return;
     if (round.votingEnabled) {
       for (const s of round.submissions) {
         const player = room.state.players.find((p) => p.id === s.playerId);
@@ -454,12 +539,6 @@ export class GameStore {
     room.state.phase = 'lobby';
     room.state.currentRound = null;
     room.state.currentSource = null;
-    // Clear any leftover staged upload so the next round feels intentional —
-    // host/players must re-upload (or rely on the seed-bank fallback on Start).
-    if (room.state.pendingSource) {
-      this.sources.delete(room.state.pendingSource.id);
-      room.state.pendingSource = null;
-    }
     this.clearPhaseTimers(room);
     this.broadcast(room.state.code);
   }
@@ -521,10 +600,19 @@ export class GameStore {
 
   private pickSource(room: Room, sourceId?: string): Source | undefined {
     if (sourceId && this.sources.has(sourceId)) return this.sources.get(sourceId);
-    // A player staged an upload during the lobby — use it for this round.
-    if (room.state.pendingSource && this.sources.has(room.state.pendingSource.id)) {
-      return this.sources.get(room.state.pendingSource.id);
+    if (room.state.selectedSourceId && this.sources.has(room.state.selectedSourceId)) {
+      return this.sources.get(room.state.selectedSourceId);
     }
+    // When the host has not picked, choose the room's most-voted filed image.
+    const voteCounts = new Map<string, number>();
+    for (const sourceId of Object.values(room.state.sourceVotes)) {
+      voteCounts.set(sourceId, (voteCounts.get(sourceId) ?? 0) + 1);
+    }
+    const voted = room.state.pendingSources
+      .map((source) => ({ source, votes: voteCounts.get(source.id) ?? 0 }))
+      .filter((entry) => entry.votes > 0)
+      .sort((a, b) => b.votes - a.votes || a.source.createdAt - b.source.createdAt)[0]?.source;
+    if (voted && this.sources.has(voted.id)) return this.sources.get(voted.id);
     const all = [...this.sources.values()];
     if (all.length === 0) return undefined;
     // Prefer sources not used yet in this room; fall back to least-recently used.

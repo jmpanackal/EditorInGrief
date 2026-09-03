@@ -12,6 +12,7 @@ interface Props {
 export function Countdown({ startedAt, durationSeconds, clockOffsetMs, onExpire }: Props) {
   const [remaining, setRemaining] = useState(durationSeconds);
   const firedRef = useRef(false);
+  const lastBeepRef = useRef<number | null>(null);
   // Keep latest onExpire without resetting the fire latch when the callback identity changes.
   const onExpireRef = useRef(onExpire);
   onExpireRef.current = onExpire;
@@ -54,6 +55,30 @@ export function Countdown({ startedAt, durationSeconds, clockOffsetMs, onExpire 
   const secs = Math.ceil(remaining);
   const danger = remaining <= 10;
   const warn = remaining <= 30 && !danger;
+
+  // A tiny generated beep keeps the bundle asset-free. Browsers only permit
+  // sound after a user gesture; when they decline it, this harmlessly no-ops.
+  useEffect(() => {
+    if (!danger || secs <= 0 || secs === lastBeepRef.current) return;
+    lastBeepRef.current = secs;
+    try {
+      const AudioCtx = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = secs <= 5 ? 880 : 660;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.07, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.10);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.11);
+      osc.onended = () => void ctx.close();
+    } catch {
+      // Sound is a helpful enhancement, never a reason to disrupt the timer.
+    }
+  }, [danger, secs]);
 
   return (
     <div className="flex items-center gap-3 w-full">

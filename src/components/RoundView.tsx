@@ -19,6 +19,16 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
 
   const connected = state.players.filter((p) => p.connected).length;
   const readyCount = round.submissions.length;
+  const previousReadyCount = useRef(readyCount);
+  const [filedPulse, setFiledPulse] = useState(false);
+
+  useEffect(() => {
+    if (readyCount === previousReadyCount.current) return;
+    previousReadyCount.current = readyCount;
+    setFiledPulse(true);
+    const timeout = window.setTimeout(() => setFiledPulse(false), 650);
+    return () => window.clearTimeout(timeout);
+  }, [readyCount]);
 
   const handleSubmit = useCallback((png: string) => {
     room.submit(round.id, png);
@@ -65,16 +75,15 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
               ) : (
                 <span className="pill">{lengthBadge(round.timerMode, round.timerSeconds)}</span>
               )}
-              {round.maxRedactions != null && (
-                <span className="pill">max {round.maxRedactions}</span>
-              )}
               <span className="pill">{isUpload ? 'Wire upload' : 'Wire photo'}</span>
             </div>
             <div className="font-display font-black text-xl mt-1">
               {inCountdown ? 'Get ready…' : 'Black out the story to make it funnier.'}
             </div>
           </div>
-          <span className="pill">{readyCount}/{connected} filed</span>
+          <span className={`pill font-display font-black transition-transform ${filedPulse ? 'animate-pop bg-grief text-paper border-ink scale-110' : ''}`}>
+            {readyCount}/{connected} filed
+          </span>
         </div>
         {untimed ? (
           <div className="flex items-center gap-3 w-full flex-wrap">

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RoomApi } from '../state/useRoom';
 import { prepareUpload } from '../lib/image';
 import { runOcr } from '../lib/ocr';
+import type { Source } from '@shared/types';
 
 /**
  * Pre-round upload (Phase 3 pulled forward).
@@ -61,7 +62,8 @@ type Busy = 'idle' | 'preparing' | 'ocr';
 type MenuState = { x: number; y: number } | null;
 
 export function SourceUpload({ room }: { room: RoomApi }) {
-  const pending = room.state?.pendingSource ?? null;
+  const pendingSources = room.state?.pendingSources ?? [];
+  const pending = pendingSources.at(-1) ?? null;
   const [busy, setBusy] = useState<Busy>('idle');
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -232,7 +234,7 @@ export function SourceUpload({ room }: { room: RoomApi }) {
           className="w-full text-left px-3 py-1.5 hover:bg-paper2 text-grief"
           onClick={() => {
             setMenu(null);
-            room.clearSource();
+            if (pending) room.clearSource(pending.id);
           }}
         >
           Clear
@@ -242,7 +244,9 @@ export function SourceUpload({ room }: { room: RoomApi }) {
   );
 
   // ---- staged upload preview -------------------------------------------
-  if (pending) {
+  // Sources are now kept on a session shelf, so uploads never replace each other.
+  const showLegacyPreview = false;
+  if (pending && showLegacyPreview) {
     return (
       <div
         ref={zoneRef}
@@ -264,7 +268,7 @@ export function SourceUpload({ room }: { room: RoomApi }) {
             {pending.wordCount > 0 ? `~${pending.wordCount} words in the copy` : 'No text read — manual tools still work'}
           </span>
           <span className="flex-1" />
-          <button className="btn-ghost text-sm" onClick={() => room.clearSource()}>Remove</button>
+          <button className="btn-ghost text-sm" onClick={() => room.clearSource(pending.id)}>Remove</button>
           <button className="btn-secondary text-sm !py-1.5" onClick={() => inputRef.current?.click()}>Replace</button>
         </div>
         <p className="text-[11px] text-ink3/80">Right-click to paste a replacement · Ctrl+V works too</p>
@@ -289,17 +293,25 @@ export function SourceUpload({ room }: { room: RoomApi }) {
       onPointerEnter={() => { pointerOverZone.current = true; }}
       onPointerLeave={() => { pointerOverZone.current = false; }}
     >
-      <button
-        type="button"
-        disabled={working}
+      <div
+        role="button"
+        tabIndex={0}
+        contentEditable
+        suppressContentEditableWarning
         onClick={() => inputRef.current?.click()}
-        onContextMenu={openMenu}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
         onDragOver={(e) => { e.preventDefault(); if (!working) setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
-        className={`w-full rounded-[3px] border-2 border-dashed px-4 py-6 text-center transition-colors ${
+        onPaste={(e) => {
+          const file = fileFromClipboardEvent(e.nativeEvent);
+          if (!file) return;
+          e.preventDefault();
+          void handleFile(file);
+        }}
+        className={`w-full rounded-[3px] border-2 border-dashed px-4 py-6 text-center transition-colors cursor-pointer ${
           dragOver ? 'border-grief bg-grief/10' : 'border-ink/40 bg-paper2/50 hover:border-ink hover:bg-paper2'
-        } disabled:opacity-60 disabled:cursor-wait`}
+        } ${working ? 'opacity-60 cursor-wait pointer-events-none' : ''}`}
       >
         {working ? (
           <div className="flex flex-col items-center gap-2 text-sm text-ink2">
@@ -317,6 +329,14 @@ export function SourceUpload({ room }: { room: RoomApi }) {
             <span className="text-[11px] text-ink3/80">PNG · JPEG · WebP — big plates are auto-shrunk</span>
           </div>
         )}
+      </div>
+      <button
+        type="button"
+        className="btn-ghost self-center text-xs !py-1"
+        disabled={working}
+        onClick={() => void pasteFromClipboardApi()}
+      >
+        Paste image from clipboard
       </button>
       {error && <p className="text-xs text-grief font-semibold">{error}</p>}
       <input
@@ -327,6 +347,63 @@ export function SourceUpload({ room }: { room: RoomApi }) {
         onChange={(e) => handleFile(e.target.files?.[0])}
       />
       {contextMenu}
+      {pendingSources.length > 0 && <SourceShelf room={room} sources={pendingSources} />}
+    </div>
+  );
+}
+
+function SourceShelf({ room, sources }: { room: RoomApi; sources: NonNullable<RoomApi['state']>['pendingSources'] }) {
+  const state = room.state!;
+  const [preview, setPreview] = useState<Source | null>(null);
+  const myVote = room.playerId ? state.sourceVotes[room.playerId] : undefined;
+  const voteCount = (sourceId: string) => Object.values(state.sourceVotes).filter((id) => id === sourceId).length;
+
+  return (
+    <div className="mt-2 border-t border-ink/25 pt-3">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="kicker text-[10px]">Image shelf</span>
+        <span className="text-xs text-ink3">Vote for the next story; filed images stay for later rounds.</span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {sources.map((source) => {
+          const owner = state.players.find((player) => player.id === source.uploadedBy)?.nickname ?? 'Wire desk';
+          const selected = state.selectedSourceId === source.id;
+          const votes = voteCount(source.id);
+          const canRemove = room.isHost || source.uploadedBy === room.playerId;
+          return (
+            <div key={source.id} className={`rounded-[3px] border-2 p-2 flex flex-col gap-2 ${selected ? 'border-grief bg-grief/5' : 'border-ink/35 bg-paper2'}`}>
+              <button type="button" onClick={() => setPreview(source)} className="block w-full rounded-[2px] overflow-hidden border border-ink bg-papercard hover:border-grief focus:outline-none focus:ring-2 focus:ring-grief/50">
+                <img src={source.imageUrl} alt={`Preview image filed by ${owner}`} className="w-full h-44 object-contain bg-paper" />
+                <span className="block text-[11px] py-1 text-ink2 font-semibold">Click to inspect full size</span>
+              </button>
+              <div className="min-w-0 flex flex-col gap-1">
+                <div className="text-xs font-bold truncate">Filed by {owner}</div>
+                <div className="text-[11px] text-ink3">{source.wordCount ? `~${source.wordCount} words` : 'Image only'} · {votes} vote{votes === 1 ? '' : 's'}</div>
+                <div className="flex flex-wrap gap-1 mt-auto">
+                  <button className={`btn-ghost text-xs !px-2 !py-1 ${myVote === source.id ? 'bg-ink text-paper' : ''}`} onClick={() => room.voteForSource(source.id)}>{myVote === source.id ? 'Voted' : 'Vote'}</button>
+                  {room.isHost && <button className={`btn-ghost text-xs !px-2 !py-1 ${selected ? 'bg-grief/15' : ''}`} onClick={() => room.selectSource(selected ? null : source.id)}>{selected ? 'Chosen' : 'Choose'}</button>}
+                  {canRemove && <button className="btn-ghost text-xs !px-2 !py-1 text-grief" onClick={() => room.clearSource(source.id)}>Remove</button>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {preview && (
+        <div className="fixed inset-0 z-50 bg-ink/70 p-4 grid place-items-center" role="dialog" aria-modal="true" aria-label="Filed image preview" onMouseDown={() => setPreview(null)}>
+          <div className="card w-full max-w-5xl max-h-[92dvh] p-3 flex flex-col gap-2" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex items-center gap-2">
+              <div className="kicker text-[10px]">Full image preview</div>
+              <span className="text-xs text-ink3">Inspect before voting or choosing</span>
+              <span className="flex-1" />
+              <button type="button" className="btn-secondary text-sm !py-1.5" onClick={() => setPreview(null)}>Close</button>
+            </div>
+            <div className="min-h-0 overflow-auto bg-paper2 border-2 border-ink rounded-[2px]">
+              <img src={preview.imageUrl} alt="Full-size filed source" className="block w-full h-auto" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

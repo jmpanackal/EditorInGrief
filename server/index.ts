@@ -114,6 +114,20 @@ function send(ws: WebSocket, msg: ServerMessage) {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
 }
 
+function disconnectPlayerSockets(code: string, playerId: string) {
+  const sockets = roomSockets.get(code);
+  if (!sockets) return;
+  for (const socket of sockets) {
+    if (meta.get(socket)?.playerId !== playerId) continue;
+    // Clear metadata first so close does not turn a removed slot into a
+    // disconnected one. The client clears its saved identity from this error.
+    meta.set(socket, {});
+    sockets.delete(socket);
+    send(socket, { type: 'error', message: 'You were removed from this room by the Host.' });
+    socket.close(4001, 'Removed by host');
+  }
+}
+
 // The store calls this on any state change (including timer-driven ones).
 store.broadcast = (code: string) => {
   const set = roomSockets.get(code);
@@ -170,14 +184,25 @@ function handle(ws: WebSocket, msg: ClientMessage) {
       const { code, playerId } = store.joinRoom(msg.code, msg.nickname);
       attach(ws, code, playerId);
       send(ws, { type: 'joined', playerId, code });
+      // Attach before broadcasting so the new player receives the same initial
+      // snapshot as everyone already in the room.
+      store.broadcast(code);
       break;
     }
     case 'rejoin': {
       const { code, playerId } = store.rejoin(msg.code, msg.playerId);
       attach(ws, code, playerId);
       send(ws, { type: 'joined', playerId, code });
+      store.broadcast(code);
       break;
     }
+    case 'removePlayer':
+      withPlayer(ws, (code, pid) => {
+        store.removePlayer(code, pid, msg.playerId);
+        disconnectPlayerSockets(code, msg.playerId);
+        store.broadcast(code);
+      });
+      break;
     case 'setVoting':
       withPlayer(ws, (code, pid) => store.setVoting(code, pid, msg.enabled));
       break;
@@ -188,7 +213,13 @@ function handle(ws: WebSocket, msg: ClientMessage) {
       withPlayer(ws, (code, pid) => store.uploadSource(code, pid, msg.imageUrl, msg.wordCount, msg.ocrText));
       break;
     case 'clearSource':
-      withPlayer(ws, (code, pid) => store.clearSource(code, pid));
+      withPlayer(ws, (code, pid) => store.clearSource(code, pid, msg.sourceId));
+      break;
+    case 'voteForSource':
+      withPlayer(ws, (code, pid) => store.voteForSource(code, pid, msg.sourceId));
+      break;
+    case 'selectSource':
+      withPlayer(ws, (code, pid) => store.selectSource(code, pid, msg.sourceId));
       break;
     case 'startRound':
       withPlayer(ws, (code, pid) => store.startRound(code, pid, msg.sourceId));
@@ -198,6 +229,9 @@ function handle(ws: WebSocket, msg: ClientMessage) {
       break;
     case 'advanceReveal':
       withPlayer(ws, (code, pid) => store.advanceReveal(code, pid, msg.direction ?? 1));
+      break;
+    case 'beginVoting':
+      withPlayer(ws, (code, pid) => store.beginVoting(code, pid));
       break;
     case 'forceReveal':
       withPlayer(ws, (code, pid) => store.forceReveal(code, pid));

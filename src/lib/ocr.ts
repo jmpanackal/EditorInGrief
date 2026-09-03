@@ -57,7 +57,7 @@ let workerPromise: Promise<TesseractWorker> | null = null;
  */
 async function getWorker(): Promise<TesseractWorker> {
   if (!workerPromise) {
-    workerPromise = (async () => {
+    const creation = (async () => {
       const { createWorker, PSM } = await import('tesseract.js');
       // 'eng', default LSTM engine. Worker/wasm/lang are fetched from the CDN and
       // cached by the browser after the first run.
@@ -68,6 +68,15 @@ async function getWorker(): Promise<TesseractWorker> {
       });
       return worker;
     })();
+    workerPromise = creation;
+    try {
+      return await creation;
+    } catch (error) {
+      // A rejected promise used to stay cached forever, so one failed worker
+      // startup could make Tap Text appear permanently jammed in that browser.
+      if (workerPromise === creation) workerPromise = null;
+      throw error;
+    }
   }
   return workerPromise;
 }

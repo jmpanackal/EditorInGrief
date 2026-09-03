@@ -1,6 +1,12 @@
 import type { Player } from '@shared/types';
 
-export function PlayerList({ players, meId, showScores }: { players: Player[]; meId: string | null; showScores?: boolean }) {
+export function PlayerList({ players, meId, showScores, canRemove = false, onRemove }: {
+  players: Player[];
+  meId: string | null;
+  showScores?: boolean;
+  canRemove?: boolean;
+  onRemove?: (playerId: string) => void;
+}) {
   const sorted = showScores ? [...players].sort((a, b) => b.score - a.score) : players;
   return (
     <ul className="flex flex-col divide-y divide-ink/15">
@@ -13,10 +19,15 @@ export function PlayerList({ players, meId, showScores }: { players: Player[]; m
           </div>
           <span className={`font-semibold truncate ${p.connected ? 'text-ink' : 'text-ink3 line-through'}`}>{p.nickname}</span>
           {showScores && i === 0 && p.score > 0 && <span title="Front-page lead">🏆</span>}
-          {p.isHost && <span className="badge">Editor</span>}
+          {p.isHost && <span className="badge">Host</span>}
           {p.id === meId && <span className="badge border-grief text-grief">You</span>}
           <span className="flex-1" />
           {showScores && <span className="tabular-nums font-display font-black text-lg text-grief">{p.score}</span>}
+          {canRemove && !p.isHost && (
+            <button type="button" className="btn-ghost !px-2 !py-1 text-xs text-grief" onClick={() => onRemove?.(p.id)} aria-label={`Remove ${p.nickname} from the room`}>
+              Remove
+            </button>
+          )}
         </li>
       ))}
     </ul>

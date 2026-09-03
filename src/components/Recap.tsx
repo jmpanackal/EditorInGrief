@@ -2,7 +2,8 @@ import { useState } from 'react';
 import type { RoundRecap } from '@shared/types';
 import type { RoomApi } from '../state/useRoom';
 import { dateline } from '../lib/format';
-import { canvasToBlob, composeFrontPage, downloadBlob, shareOrDownload } from '../lib/frontPage';
+import { canvasToBlob, composeFrontPage, downloadBlob } from '../lib/frontPage';
+import { ExpandableImage } from './ExpandableImage';
 
 /**
  * End-of-game recap: a themed, scrollable gallery of every round — the original
@@ -12,31 +13,23 @@ import { canvasToBlob, composeFrontPage, downloadBlob, shareOrDownload } from '.
  */
 export function Recap({ room }: { room: RoomApi }) {
   const rounds = room.history;
-  const [busy, setBusy] = useState<null | 'download' | 'share'>(null);
+  const [busy, setBusy] = useState<null | 'download'>(null);
   const [note, setNote] = useState<string | null>(null);
 
   if (rounds.length === 0) return null;
 
   const code = room.state?.code ?? '----';
 
-  const runExport = async (mode: 'download' | 'share') => {
+  const runExport = async () => {
     if (busy) return;
-    setBusy(mode);
+    setBusy('download');
     setNote(null);
     try {
       const canvas = await composeFrontPage(rounds, { code, date: dateline() });
       const blob = await canvasToBlob(canvas);
       const filename = `redactionist-gazette-${code}.png`;
-      if (mode === 'download') {
-        downloadBlob(blob, filename);
-        setNote('Saved to your device.');
-      } else {
-        const res = await shareOrDownload(blob, filename, {
-          title: 'The Redactionist’s Gazette',
-          text: 'Our redaction masterpieces from Editor in Grief 📰',
-        });
-        setNote(res === 'shared' ? 'Shared!' : 'Shared sheet unavailable — saved to your device instead.');
-      }
+      downloadBlob(blob, filename);
+      setNote('Saved to your device.');
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'Could not build the front page.');
     } finally {
@@ -55,10 +48,10 @@ export function Recap({ room }: { room: RoomApi }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="btn-secondary" disabled={busy !== null} onClick={() => runExport('share')}>
-            {busy === 'share' ? 'Composing…' : '↗ Share'}
+          <button className="btn-secondary" disabled aria-label="Sharing is not available yet">
+            ↗ Share (soon)
           </button>
-          <button className="btn-primary" disabled={busy !== null} onClick={() => runExport('download')}>
+          <button className="btn-primary" disabled={busy !== null} onClick={runExport}>
             {busy === 'download' ? 'Composing…' : '⬇ Download front page'}
           </button>
         </div>
@@ -67,7 +60,7 @@ export function Recap({ room }: { room: RoomApi }) {
 
       <div className="hr-thin" />
 
-      <div className="flex flex-col gap-6 max-h-[70vh] overflow-y-auto pr-1">
+      <div className="flex flex-col gap-6">
         {rounds.map((r) => (
           <RoundBlock key={r.roundId} recap={r} fallbackName={(pid) => room.state?.players.find((p) => p.id === pid)?.nickname} />
         ))}
@@ -105,7 +98,7 @@ function RoundBlock({
         {/* Original reference clipping */}
         <figure className="rounded-[2px] border-2 border-dashed border-ink bg-papercard overflow-hidden">
           <div className="bg-paper2 grid place-items-center">
-            <img src={recap.source.imageUrl} alt="Original source" className="w-full h-32 object-contain" />
+            <ExpandableImage src={recap.source.imageUrl} alt={`Original source for story ${recap.roundNumber}`} className="w-full h-32 object-contain" />
           </div>
           <figcaption className="px-2 py-1.5 border-t-2 border-dashed border-ink">
             <div className="text-sm font-bold truncate">Original</div>
@@ -125,7 +118,7 @@ function RoundBlock({
                 <span className="absolute top-1 right-1 z-10 stamp !px-1.5 !py-0.5 text-[10px]">★ Winner</span>
               )}
               <div className="bg-paper2 grid place-items-center">
-                <img src={s.editedImageUrl} alt={`${nameOf(s.playerId)}'s redaction`} className="w-full h-32 object-contain" />
+                <ExpandableImage src={s.editedImageUrl} alt={`${nameOf(s.playerId)}'s redaction for story ${recap.roundNumber}`} className="w-full h-32 object-contain" />
               </div>
               <figcaption className={`px-2 py-1.5 border-t-2 ${winner ? 'border-grief' : 'border-ink'}`}>
                 <div className="text-sm font-bold truncate">{nameOf(s.playerId)}</div>

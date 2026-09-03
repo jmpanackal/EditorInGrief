@@ -47,9 +47,10 @@ export function Lobby({ room }: { room: RoomApi }) {
 
   const setSettings = (partial: Partial<RoundSettings>) => room.setRoundSettings(partial);
 
-  const wordCount = state.pendingSource?.wordCount ?? 0;
-  const autoEstimate = state.pendingSource
-    ? computeTimerSeconds(state.pendingSource.wordCount)
+  const selectedSource = state.selectedSourceId ? state.pendingSources.find((source) => source.id === state.selectedSourceId) : null;
+  const wordCount = selectedSource?.wordCount ?? 0;
+  const autoEstimate = selectedSource
+    ? computeTimerSeconds(selectedSource.wordCount)
     : null;
   const resolvedPreview = resolveRoundTimerSeconds(settings, wordCount);
   const lengthDisabled = settings.untimed;
@@ -83,10 +84,10 @@ export function Lobby({ room }: { room: RoomApi }) {
           <div className="flex items-center gap-2">
             <div className="kicker text-xs">Front-page source</div>
             <span className="flex-1" />
-            {!state.pendingSource && <span className="badge">wire photo</span>}
+            {state.pendingSources.length === 0 && <span className="badge">wire photo</span>}
           </div>
           <SourceUpload room={room} />
-          {!state.pendingSource && (
+          {state.pendingSources.length === 0 && (
             <p className="text-xs text-ink3">
               No upload? We’ll pull a stock photo from the wire (seed bank).
             </p>
@@ -95,7 +96,7 @@ export function Lobby({ room }: { room: RoomApi }) {
 
         {room.isHost ? (
           <div className="card p-5 flex flex-col gap-4">
-            <div className="kicker text-xs">Editor’s desk</div>
+            <div className="kicker text-xs">Host controls</div>
 
             <SettingRow
               title="Enable voting"
@@ -176,7 +177,7 @@ export function Lobby({ room }: { room: RoomApi }) {
         ) : (
           <div className="card p-6 flex flex-col items-center gap-3 text-center">
             <div className="stamp stamp-ink animate-stamp-in">Hold the press</div>
-            <div className="font-display font-bold text-lg mt-1">Awaiting the Editor…</div>
+            <div className="font-display font-bold text-lg mt-1">Awaiting the Host…</div>
             <p className="text-sm text-ink2">They’re setting the next story. You can still file a screenshot above!</p>
             <div className="flex items-center justify-center gap-2 text-xs mt-1 flex-wrap">
               {settings.untimed ? (
@@ -200,7 +201,7 @@ export function Lobby({ room }: { room: RoomApi }) {
           <div className="kicker text-xs">The Newsroom</div>
           <span className="badge">{state.players.filter((p) => p.connected).length} on the floor</span>
         </div>
-        <PlayerList players={state.players} meId={room.playerId} />
+        <PlayerList players={state.players} meId={room.playerId} canRemove={room.isHost} onRemove={room.removePlayer} />
         <p className="text-xs text-ink3 mt-3 italic">Any staffer may file a screenshot for the next edition.</p>
       </div>
     </div>
