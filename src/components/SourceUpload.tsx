@@ -117,7 +117,7 @@ export function SourceUpload({ room }: { room: RoomApi }) {
             {pending.wordCount > 0 ? `~${pending.wordCount} words in the copy` : 'No text read — manual tools still work'}
           </span>
           <span className="flex-1" />
-          <button className="btn-ghost text-sm" onClick={() => room.clearSource()}>Spike it</button>
+          <button className="btn-ghost text-sm" onClick={() => room.clearSource()}>Remove</button>
           <button className="btn-secondary text-sm !py-1.5" onClick={() => inputRef.current?.click()}>Replace</button>
         </div>
         <input
@@ -156,7 +156,7 @@ export function SourceUpload({ room }: { room: RoomApi }) {
         ) : (
           <div className="flex flex-col items-center gap-1">
             <span className="text-2xl">🗞️</span>
-            <span className="text-sm font-bold">File your own screenshot</span>
+            <span className="text-sm font-bold">Upload a screenshot</span>
             <span className="text-xs text-ink3">Drag &amp; drop, click to browse, or paste (⌘/Ctrl-V)</span>
             <span className="text-[11px] text-ink3/80">PNG · JPEG · WebP — big plates are auto-shrunk</span>
           </div>

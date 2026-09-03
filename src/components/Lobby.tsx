@@ -100,7 +100,7 @@ export function Lobby({ room }: { room: RoomApi }) {
             />
 
             <button className="btn-primary text-lg py-3.5 mt-1" disabled={!canStart} onClick={() => room.startRound()}>
-              Run the story →
+              Start Editing →
             </button>
           </div>
         ) : (

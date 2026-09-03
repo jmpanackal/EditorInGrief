@@ -1257,7 +1257,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         </span>
         <div className="flex-1" />
         <button onClick={handleSubmit} disabled={!interactive} className="btn-primary">
-          {submitted ? 'Filed ✓' : 'File to the desk →'}
+          {submitted ? 'Submitted ✓' : 'Submit →'}
         </button>
       </div>
     </div>

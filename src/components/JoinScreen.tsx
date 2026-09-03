@@ -60,8 +60,8 @@ export function JoinScreen({ room }: { room: RoomApi }) {
 
           {/* Segmented join/create */}
           <div className="segmented w-full">
-            <button className="segmented-item flex-1" data-active={mode === 'join'} onClick={() => setMode('join')}>Join a room</button>
-            <button className="segmented-item flex-1" data-active={mode === 'create'} onClick={() => setMode('create')}>Start a press</button>
+            <button className="segmented-item flex-1" data-active={mode === 'join'} onClick={() => setMode('join')}>Join a Room</button>
+            <button className="segmented-item flex-1" data-active={mode === 'create'} onClick={() => setMode('create')}>Start Game</button>
           </div>
 
           {mode === 'join' ? (
@@ -77,12 +77,12 @@ export function JoinScreen({ room }: { room: RoomApi }) {
                 />
               </div>
               <button className="btn-primary py-3.5 text-lg" disabled={!canJoin || connecting} onClick={() => room.joinRoom(code, nick)}>
-                {connecting ? 'Connecting…' : 'Join the newsroom →'}
+                {connecting ? 'Connecting…' : 'Join Game →'}
               </button>
             </>
           ) : (
             <button className="btn-primary py-3.5 text-lg" disabled={!canCreate || connecting} onClick={() => room.createRoom(nick)}>
-              {connecting ? 'Connecting…' : 'Roll the presses →'}
+              {connecting ? 'Connecting…' : 'Start Game →'}
             </button>
           )}
 

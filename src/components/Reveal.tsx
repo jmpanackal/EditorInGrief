@@ -58,7 +58,7 @@ export function Reveal({ room }: { room: RoomApi }) {
             onTouchStart={() => setShowOriginal(true)}
             onTouchEnd={() => setShowOriginal(false)}
           >
-            👁 Hold to see the proof
+            👁 Hold to see original
           </button>
 
           {round.votingEnabled && (
@@ -113,13 +113,13 @@ export function Reveal({ room }: { room: RoomApi }) {
 
       {room.isHost ? (
         <div className="flex items-center gap-2">
-          <button className="btn-secondary" disabled={idx === 0} onClick={() => room.advanceReveal(-1)}>← Prev</button>
+          <button className="btn-secondary" disabled={idx === 0} onClick={() => room.advanceReveal(-1)}>← Previous</button>
           {isLast ? (
             <button className="btn-primary flex-1" onClick={room.showScoreboard}>
-              {round.votingEnabled ? 'Tally votes → Scoreboard' : 'Put it to bed →'}
+              {round.votingEnabled ? 'Tally Votes →' : 'See Results →'}
             </button>
           ) : (
-            <button className="btn-primary flex-1" onClick={() => room.advanceReveal(1)}>Next edit →</button>
+            <button className="btn-primary flex-1" onClick={() => room.advanceReveal(1)}>Next →</button>
           )}
         </div>
       ) : (
