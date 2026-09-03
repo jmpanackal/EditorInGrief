@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { RoomState, RoundSettings, ServerMessage } from '@shared/types';
+import type { RoomState, RoundRecap, RoundSettings, ServerMessage } from '@shared/types';
 import type { ConnectionStatus, Transport } from '../transport/Transport';
 import { WebSocketTransport } from '../transport/WebSocketTransport';
 
@@ -37,6 +37,8 @@ export interface RoomApi {
   clearError: () => void;
   me: RoomState['players'][number] | null;
   isHost: boolean;
+  /** Per-round recaps accumulated across this session (for the end-of-game recap + export). */
+  history: RoundRecap[];
 
   createRoom: (nickname: string) => void;
   joinRoom: (code: string, nickname: string) => void;
@@ -63,6 +65,10 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
   const [state, setState] = useState<RoomState | null>(null);
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Client-accumulated recap of every round played this session. The server only
+  // keeps the current round, so we snapshot each round (keyed by id) from the
+  // full-state broadcasts as submissions land / votes settle.
+  const [history, setHistory] = useState<RoundRecap[]>([]);
 
   const transportRef = useRef<Transport | null>(null);
   const identityRef = useRef<Identity | null>(loadIdentity());
@@ -82,9 +88,32 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
           saveIdentity(identityRef.current);
           break;
         }
-        case 'state':
+        case 'state': {
           setState(msg.state);
+          // Accumulate a recap for any round that has results. Upsert by round id
+          // so later snapshots (final vote tallies) overwrite earlier ones.
+          const r = msg.state.currentRound;
+          const src = msg.state.currentSource;
+          if (r && src && r.submissions.length > 0) {
+            const recap: RoundRecap = {
+              roundId: r.id,
+              roundNumber: msg.state.roundNumber,
+              // Snapshot copies — server clears/replaces currentSource between rounds.
+              source: { ...src },
+              submissions: r.submissions.map((s) => ({ ...s })),
+              votingEnabled: r.votingEnabled,
+              players: msg.state.players.map((p) => ({ id: p.id, nickname: p.nickname })),
+            };
+            setHistory((prev) => {
+              const idx = prev.findIndex((e) => e.roundId === recap.roundId);
+              if (idx === -1) return [...prev, recap];
+              const next = prev.slice();
+              next[idx] = recap;
+              return next;
+            });
+          }
           break;
+        }
         case 'error':
           setError(msg.message);
           // If our stored identity is invalid, drop it so we don't loop on rejoin.
@@ -140,6 +169,7 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
     saveIdentity(null);
     setPlayerId(null);
     setState(null);
+    setHistory([]);
   }, []);
 
   const setVoting = useCallback((enabled: boolean) => send({ type: 'setVoting', enabled }), [send]);
@@ -164,6 +194,7 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
     clearError: () => setError(null),
     me,
     isHost,
+    history,
     createRoom,
     joinRoom,
     leave,

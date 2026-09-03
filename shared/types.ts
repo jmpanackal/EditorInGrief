@@ -78,6 +78,26 @@ export interface Session {
   players: Player[];
 }
 
+/**
+ * A client-side snapshot of one completed round, captured as rounds go by so we
+ * can show an end-of-game recap and compose a shareable front-page export.
+ *
+ * The authoritative server state only ever holds the CURRENT round (Phase 1-2,
+ * no persistence), so the client accumulates these from the full-state snapshots
+ * it already receives — no backend/history storage required.
+ *
+ * PHASE 4 TODO: when a real datastore exists, source recaps from persisted
+ * rounds/submissions instead of this in-tab accumulation.
+ */
+export interface RoundRecap {
+  roundId: string;
+  roundNumber: number;
+  source: Source; // the original screenshot for the round
+  submissions: Submission[]; // every player's redacted result
+  votingEnabled: boolean;
+  players: Pick<Player, 'id' | 'nickname'>[]; // byline lookup snapshot
+}
+
 // ---------------------------------------------------------------------------
 // Game state machine
 // ---------------------------------------------------------------------------
