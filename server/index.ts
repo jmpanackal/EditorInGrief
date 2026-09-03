@@ -135,7 +135,8 @@ function handle(ws: WebSocket, msg: ClientMessage) {
       withPlayer(ws, (code, pid) => store.castVote(code, pid, msg.submissionId));
       break;
     case 'nextRound':
-      // "Show scoreboard" then host can start another round from there.
+      // Reveal → scoreboard. Host then uses returnToLobby ("Play Again") to stage
+      // a new upload before Start Editing — never auto-start from scoreboard.
       withPlayer(ws, (code, pid) => store.showScoreboard(code, pid));
       break;
     case 'returnToLobby':

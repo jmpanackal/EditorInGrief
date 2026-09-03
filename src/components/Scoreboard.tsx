@@ -56,11 +56,8 @@ export function Scoreboard({ room }: { room: RoomApi }) {
 
           {room.isHost && (
             <div className="flex flex-wrap gap-2 mt-6">
-              <button className="btn-primary" onClick={() => room.startRound()}>
+              <button className="btn-primary" onClick={room.returnToLobby}>
                 Play Again →
-              </button>
-              <button className="btn-secondary" onClick={room.returnToLobby}>
-                Back to Lobby
               </button>
             </div>
           )}

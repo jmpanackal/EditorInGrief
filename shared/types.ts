@@ -194,8 +194,8 @@ export type ClientMessage =
   | { type: 'advanceReveal'; direction?: 1 | -1 } // host only
   | { type: 'forceReveal' } // host only; skip waiting (e.g. AFK during untimed)
   | { type: 'castVote'; submissionId: string } // when voting enabled
-  | { type: 'nextRound' } // host only; reveal/scoreboard -> lobby-ish round setup
-  | { type: 'returnToLobby' }; // host only
+  | { type: 'nextRound' } // host only; reveal -> scoreboard (tallies votes)
+  | { type: 'returnToLobby' }; // host only; scoreboard/any -> lobby (fresh upload window)
 
 /** Messages sent FROM the server TO clients. */
 export type ServerMessage =

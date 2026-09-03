@@ -1219,11 +1219,12 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         <button onClick={reset} disabled={!interactive || shapeCount === 0} className="btn-secondary !py-2">Reset</button>
       </div>
 
-      {/* Canvas viewport */}
+      {/* Canvas viewport — tall enough on desktop to show more of long screenshots;
+          responsive so phones stay usable without eating the whole chrome. */}
       <div
         ref={containerRef}
-        className="relative w-full rounded-[3px] overflow-hidden bg-paper2 border-2 border-ink"
-        style={{ height: '60vh', maxHeight: '640px', touchAction: 'none' }}
+        className="relative w-full rounded-[3px] overflow-hidden bg-paper2 border-2 border-ink h-[min(72dvh,720px)] sm:h-[min(78dvh,860px)]"
+        style={{ touchAction: 'none' }}
       >
         <canvas
           ref={displayRef}

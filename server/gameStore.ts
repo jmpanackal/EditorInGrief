@@ -323,7 +323,9 @@ export class GameStore {
   startRound(code: string, playerId: string, sourceId?: string): void {
     const room = this.requireHost(code, playerId);
     this.normalizeRoomSettings(room);
-    if (room.state.phase !== 'lobby' && room.state.phase !== 'scoreboard') {
+    // Always start from the lobby so hosts can stage a fresh upload (or fall
+    // back to the seed bank) before countdown — never jump straight from scoreboard.
+    if (room.state.phase !== 'lobby') {
       throw new GameError('You can only start a round from the lobby.');
     }
     const source = this.pickSource(room, sourceId);
@@ -452,6 +454,12 @@ export class GameStore {
     room.state.phase = 'lobby';
     room.state.currentRound = null;
     room.state.currentSource = null;
+    // Clear any leftover staged upload so the next round feels intentional —
+    // host/players must re-upload (or rely on the seed-bank fallback on Start).
+    if (room.state.pendingSource) {
+      this.sources.delete(room.state.pendingSource.id);
+      room.state.pendingSource = null;
+    }
     this.clearPhaseTimers(room);
     this.broadcast(room.state.code);
   }
