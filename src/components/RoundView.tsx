@@ -30,8 +30,12 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
     return () => window.clearTimeout(timeout);
   }, [readyCount]);
 
-  const handleSubmit = useCallback((png: string) => {
-    room.submit(round.id, png);
+  const handleSubmit = useCallback((png: string, editCount: number) => {
+    room.submit(round.id, png, editCount);
+  }, [room, round.id]);
+
+  const handleUnsubmit = useCallback(() => {
+    room.unsubmit(round.id);
   }, [room, round.id]);
 
   const requestAutoSubmit = useCallback(() => {
@@ -66,8 +70,8 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
     ? 'Get ready…'
     : submittedByMe
       ? (untimed
-          ? 'Filed — waiting for others…'
-          : 'Filed — waiting for others or the deadline…')
+          ? 'Ready — waiting for others…'
+          : 'Ready — waiting for others or the deadline…')
       : 'Redact the story to make it funnier.';
 
   return (
@@ -98,11 +102,12 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
           </div>
 
           <span
-            className={`pill font-display font-black shrink-0 transition-transform text-[10px] sm:text-xs ${
-              filedPulse ? 'animate-pop bg-grief text-paper border-ink scale-110' : ''
+            className={`shrink-0 rounded-[3px] border-2 border-ink bg-paper2 px-2 sm:px-2.5 py-0.5 sm:py-1 font-display font-black tabular-nums text-sm sm:text-base text-ink leading-none transition-transform ${
+              filedPulse ? 'animate-pop !bg-grief !text-paper scale-110' : ''
             }`}
+            title="Players ready"
           >
-            {readyCount}/{connected} filed
+            {readyCount}/{connected} ready
           </span>
 
           {untimed && (
@@ -142,6 +147,7 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
         <RedactionEditor
           imageUrl={source.imageUrl}
           onSubmit={handleSubmit}
+          onUnsubmit={handleUnsubmit}
           submitted={submittedByMe}
           flushToken={flushToken}
           disabled={inCountdown}
@@ -172,7 +178,7 @@ function UntimedStatus({
     ? 'No deadline'
     : submittedByMe
       ? 'Waiting…'
-      : 'File when ready';
+      : 'Mark Ready when done';
   const pct = connected > 0 ? (readyCount / connected) * 100 : 0;
   return (
     <div className="flex items-center gap-2 shrink-0">

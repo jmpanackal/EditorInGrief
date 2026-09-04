@@ -281,7 +281,12 @@ function handle(ws: WebSocket, msg: ClientMessage) {
       withPlayer(ws, (code, pid) => store.startRound(code, pid, msg.sourceId));
       break;
     case 'submit':
-      withPlayer(ws, (code, pid) => store.submit(code, pid, msg.roundId, msg.editedImageUrl));
+      withPlayer(ws, (code, pid) =>
+        store.submit(code, pid, msg.roundId, msg.editedImageUrl, msg.editCount ?? 0),
+      );
+      break;
+    case 'unsubmit':
+      withPlayer(ws, (code, pid) => store.unsubmit(code, pid, msg.roundId));
       break;
     case 'advanceReveal':
       withPlayer(ws, (code, pid) => store.advanceReveal(code, pid, msg.direction ?? 1));

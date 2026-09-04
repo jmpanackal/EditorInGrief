@@ -30,6 +30,11 @@ export interface Submission {
   roundId: string;
   playerId: string;
   editedImageUrl: string; // flattened PNG data URL
+  /**
+   * Number of redaction shapes at submit time (from the editor). Snapshot only —
+   * cannot be recovered from the flattened PNG. Defaults to 0 for legacy payloads.
+   */
+  editCount: number;
   votesCount: number;
 }
 
@@ -68,13 +73,13 @@ export interface Round {
   votingEnabled: boolean;
   votes: Record<string, string>; // voterPlayerId -> submissionId
   /**
-   * Scoreboard emoji reactions: submissionId → emoji → playerIds who reacted.
-   * Lightweight crowd signal while waiting on Play again (synced to all clients).
+   * Emoji reactions on filed edits: submissionId → emoji → playerIds who reacted.
+   * Synced during reveal and scoreboard so the room can react while browsing.
    */
   reactions: Record<string, Record<string, string[]>>;
 }
 
-/** Allowed Verdict reaction emojis (scoreboard). */
+/** Allowed reaction emojis (reveal + scoreboard). */
 export const VERDICT_REACTION_EMOJIS = ['😂', '🔥', '💀', '👏'] as const;
 export type VerdictReactionEmoji = (typeof VERDICT_REACTION_EMOJIS)[number];
 
@@ -88,7 +93,7 @@ export interface RoundSettings {
   maxRedactions: number | null;
   /**
    * Round length preset. Ignored when {@link untimed} is on.
-   * Default: `'normal'` (2 minutes).
+   * Default: `'auto'` (scales with source word count).
    */
   timerMode: TimerMode;
   /**
@@ -204,12 +209,14 @@ export type ClientMessage =
   | { type: 'voteForSource'; sourceId: string | null } // null clears your vote
   | { type: 'selectSource'; sourceId: string | null } // host only
   | { type: 'startRound'; sourceId?: string } // host only; sourceId optional (else random from bank)
-  | { type: 'submit'; roundId: string; editedImageUrl: string }
+  | { type: 'submit'; roundId: string; editedImageUrl: string; editCount: number }
+  /** Withdraw Ready during an active round so the player can keep editing. */
+  | { type: 'unsubmit'; roundId: string }
   | { type: 'advanceReveal'; direction?: 1 | -1 } // host only
   | { type: 'beginVoting' } // host only; reveal -> ballot when voting is enabled
   | { type: 'forceReveal' } // host only; skip waiting (e.g. AFK during untimed)
-  | { type: 'castVote'; submissionId: string } // when voting enabled
-  | { type: 'react'; submissionId: string; emoji: VerdictReactionEmoji } // scoreboard toggle
+  | { type: 'castVote'; submissionId: string | null } // null clears your vote
+  | { type: 'react'; submissionId: string; emoji: VerdictReactionEmoji } // reveal/scoreboard toggle
   | { type: 'nextRound' } // host only; ballot/reveal -> scoreboard (tallies votes)
   | { type: 'returnToLobby' }; // host only; scoreboard/any -> lobby (fresh upload window)
 
@@ -223,28 +230,34 @@ export type ServerMessage =
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Auto round-length formula (when {@link TimerMode} is `'auto'`).
- *
- *   timer_seconds = clamp(60 + 0.5 * word_count, 60, 210)
- *
- * Floor 60s so Auto never feels rushed; ceiling ~3.5 minutes. word_count is a
- * rough estimate from the image (seed metadata or client text-read at upload).
- * Fixed presets and Custom bypass this (see {@link resolveRoundTimerSeconds}).
- */
-export function computeTimerSeconds(wordCount: number): number {
-  const raw = 60 + 0.5 * wordCount;
-  return Math.round(Math.min(210, Math.max(AUTO_TIMER_MIN, raw)));
-}
-
 /** Fixed preset durations (seconds). */
-export const TIMER_QUICK_SECONDS = 30;
-export const TIMER_NORMAL_SECONDS = 120;
-export const TIMER_LONG_SECONDS = 300;
+export const TIMER_QUICK_SECONDS = 60;
+export const TIMER_NORMAL_SECONDS = 180;
+export const TIMER_LONG_SECONDS = 600;
+
+/** Auto linear fit: base + seconds-per-word (see {@link computeTimerSeconds}). */
+export const AUTO_TIMER_BASE_SECONDS = 55;
+export const AUTO_SECONDS_PER_WORD = 2.17;
 
 /** Auto formula floor / ceiling (seconds). */
 export const AUTO_TIMER_MIN = 60;
-export const AUTO_TIMER_MAX = 210;
+export const AUTO_TIMER_MAX = 600;
+
+/**
+ * Auto round-length formula (when {@link TimerMode} is `'auto'`).
+ *
+ *   timer_seconds = clamp(55 + 2.17 * word_count, 60, 600)
+ *
+ * Tuned so ~30 words ≈ 2 minutes and ~113 words ≈ 5 minutes. Floor 60s so
+ * Auto never feels rushed; ceiling matches Long / Custom max (10 minutes).
+ * word_count is a rough estimate from the image (seed metadata or client
+ * text-read at upload). Fixed presets and Custom bypass this
+ * (see {@link resolveRoundTimerSeconds}).
+ */
+export function computeTimerSeconds(wordCount: number): number {
+  const raw = AUTO_TIMER_BASE_SECONDS + AUTO_SECONDS_PER_WORD * wordCount;
+  return Math.round(Math.min(AUTO_TIMER_MAX, Math.max(AUTO_TIMER_MIN, raw)));
+}
 
 /** Custom time-picker bounds (seconds). */
 export const CUSTOM_TIMER_MIN = 30;

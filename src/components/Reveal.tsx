@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { VERDICT_REACTION_EMOJIS } from '../../shared/types';
 import type { RoomApi } from '../state/useRoom';
 
 export function Reveal({ room }: { room: RoomApi }) {
@@ -12,6 +13,7 @@ export function Reveal({ room }: { room: RoomApi }) {
   const current = subs[idx];
   const owner = current ? state.players.find((p) => p.id === current.playerId) : null;
   const isLast = idx >= subs.length - 1;
+  const reactionMap = current ? (round.reactions ?? {})[current.id] : undefined;
 
   // Keep the source image warm so "Hold to see original" never waits on a load
   // (and never flashes the paper background while a swapped src decodes).
@@ -78,6 +80,37 @@ export function Reveal({ room }: { room: RoomApi }) {
           >
             👁 Hold to see original
           </button>
+          {current && (
+            <div className="flex items-center gap-1 ml-auto shrink-0">
+              {VERDICT_REACTION_EMOJIS.map((emoji) => {
+                const reactors = reactionMap?.[emoji] ?? [];
+                const count = reactors.length;
+                const mine = !!room.playerId && reactors.includes(room.playerId);
+                return (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => room.react(current.id, emoji)}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 leading-none transition-colors ${
+                      mine
+                        ? 'border-grief bg-grief/10'
+                        : 'border-ink/20 bg-papercard hover:border-ink/50'
+                    }`}
+                    aria-label={`React ${emoji}`}
+                    aria-pressed={mine}
+                    title={emoji}
+                  >
+                    <span aria-hidden className="text-lg">
+                      {emoji}
+                    </span>
+                    {count > 0 && (
+                      <span className="tabular-nums text-xs font-bold text-ink2">{count}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

@@ -53,7 +53,7 @@ export default function App() {
                   ? 'px-2 py-2 sm:px-3 sm:py-2.5'
                   : 'px-3 py-2.5 sm:px-4 sm:py-3'
               }`
-            : 'md:flex-1 md:min-h-0 md:overflow-y-auto md:flex md:flex-col mx-auto w-full p-4 sm:p-6 max-w-[1600px]'
+            : 'md:flex-1 md:min-h-0 md:overflow-y-auto md:flex md:flex-col mx-auto w-full min-w-0 p-4 sm:p-6 max-w-[1600px]'
         }
       >
         {!inRoom ? (

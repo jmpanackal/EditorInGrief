@@ -76,11 +76,12 @@ export interface RoomApi {
   voteForSource: (sourceId: string | null) => void;
   selectSource: (sourceId: string | null) => void;
   startRound: (sourceId?: string) => void;
-  submit: (roundId: string, editedImageUrl: string) => void;
+  submit: (roundId: string, editedImageUrl: string, editCount: number) => void;
+  unsubmit: (roundId: string) => void;
   advanceReveal: (direction?: 1 | -1) => void;
   beginVoting: () => void;
   forceReveal: () => void;
-  castVote: (submissionId: string) => void;
+  castVote: (submissionId: string | null) => void;
   react: (submissionId: string, emoji: VerdictReactionEmoji) => void;
   showScoreboard: () => void;
   returnToLobby: () => void;
@@ -239,11 +240,16 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
   const voteForSource = useCallback((sourceId: string | null) => send({ type: 'voteForSource', sourceId }), [send]);
   const selectSource = useCallback((sourceId: string | null) => send({ type: 'selectSource', sourceId }), [send]);
   const startRound = useCallback((sourceId?: string) => send({ type: 'startRound', sourceId }), [send]);
-  const submit = useCallback((roundId: string, editedImageUrl: string) => send({ type: 'submit', roundId, editedImageUrl }), [send]);
+  const submit = useCallback(
+    (roundId: string, editedImageUrl: string, editCount: number) =>
+      send({ type: 'submit', roundId, editedImageUrl, editCount }),
+    [send],
+  );
+  const unsubmit = useCallback((roundId: string) => send({ type: 'unsubmit', roundId }), [send]);
   const advanceReveal = useCallback((direction: 1 | -1 = 1) => send({ type: 'advanceReveal', direction }), [send]);
   const beginVoting = useCallback(() => send({ type: 'beginVoting' }), [send]);
   const forceReveal = useCallback(() => send({ type: 'forceReveal' }), [send]);
-  const castVote = useCallback((submissionId: string) => send({ type: 'castVote', submissionId }), [send]);
+  const castVote = useCallback((submissionId: string | null) => send({ type: 'castVote', submissionId }), [send]);
   const react = useCallback(
     (submissionId: string, emoji: VerdictReactionEmoji) => send({ type: 'react', submissionId, emoji }),
     [send],
@@ -276,6 +282,7 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
     selectSource,
     startRound,
     submit,
+    unsubmit,
     advanceReveal,
     beginVoting,
     forceReveal,

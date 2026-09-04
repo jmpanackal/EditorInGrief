@@ -46,6 +46,12 @@ type WordGranularity = 'word' | 'letter';
 type KeyedBox = OcrBox & { key: string };
 type RGB = [number, number, number];
 
+/** Initial tool: Tap text below Tailwind `md` (768px); Box on desktop. */
+function initialTool(): Tool {
+  if (typeof window === 'undefined') return 'rect';
+  return window.matchMedia('(max-width: 767px)').matches ? 'words' : 'rect';
+}
+
 /**
  * Neutral fallback fill, used ONLY when local-background sampling is impossible
  * (e.g. a cross-origin/tainted canvas where getImageData throws). In the normal
@@ -263,22 +269,39 @@ function drawActiveOutline(ctx: CanvasRenderingContext2D, s: Shape, scale: numbe
 
 /**
  * UNDERLINE affordance: a thin rule beneath each detected word/letter signals
- * it's tappable — far lighter than boxing every glyph. Already-redacted boxes
- * get a bolder RED underline (tap again to reveal); available ones a subtle ink
- * rule. Underlines are inset slightly and use an on-screen-constant thickness.
+ * it's tappable. Drawn as a light halo + dark/red core so it stays readable on
+ * both light (paper/white posts) and dark (memes, night-mode) backgrounds.
  */
 function drawUnderlines(ctx: CanvasRenderingContext2D, boxes: KeyedBox[], redacted: Set<string>, scale: number): void {
   ctx.save();
   ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   const inset = 1 / scale;
   for (const b of boxes) {
     const on = redacted.has(b.key);
     const y = b.y1 + 1.5 / scale;
+    const x0 = b.x0 + inset;
+    const x1 = b.x1 - inset;
+    // Halo — light stroke so the mark pops on dark ink/photos
     ctx.beginPath();
-    ctx.lineWidth = (on ? 2.4 : 1.6) / scale;
-    ctx.strokeStyle = on ? 'rgba(200, 30, 30, 0.95)' : 'rgba(26, 26, 26, 0.5)';
-    ctx.moveTo(b.x0 + inset, y);
-    ctx.lineTo(b.x1 - inset, y);
+    ctx.lineWidth = (on ? 5.2 : 4.2) / scale;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.moveTo(x0, y);
+    ctx.lineTo(x1, y);
+    ctx.stroke();
+    // Soft dark outer edge — pops on pale paper without eating the halo
+    ctx.beginPath();
+    ctx.lineWidth = (on ? 3.6 : 3) / scale;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.moveTo(x0, y);
+    ctx.lineTo(x1, y);
+    ctx.stroke();
+    // Core — grief red when already redacted, near-black when available
+    ctx.beginPath();
+    ctx.lineWidth = (on ? 2.2 : 1.7) / scale;
+    ctx.strokeStyle = on ? 'rgba(196, 30, 30, 1)' : 'rgba(18, 18, 18, 0.95)';
+    ctx.moveTo(x0, y);
+    ctx.lineTo(x1, y);
     ctx.stroke();
   }
   ctx.restore();
@@ -314,7 +337,9 @@ function drawSelectionBoxes(
 interface Props {
   imageUrl: string;
   disabled?: boolean;
-  onSubmit: (pngDataUrl: string) => void;
+  onSubmit: (pngDataUrl: string, editCount: number) => void;
+  /** Withdraw Ready so the player can keep editing. */
+  onUnsubmit?: () => void;
   submitted?: boolean;
   /** Incrementing this triggers an automatic flatten+submit (used by the timer
    * auto-submit). Change the value (e.g. Date.now()) to fire once. */
@@ -351,7 +376,7 @@ interface Gesture {
   pinch?: { startDist: number; imgMid: Point; startZoom: number };
 }
 
-export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flushToken, maxRedactions, storageKey }: Props) {
+export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, submitted, flushToken, maxRedactions, storageKey }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const displayRef = useRef<HTMLCanvasElement | null>(null); // on-screen (viewport res)
   const baseRef = useRef<HTMLCanvasElement | null>(null); // offscreen committed scene (natural res)
@@ -370,15 +395,27 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   const pointersRef = useRef<Map<number, Point>>(new Map());
   const gestureRef = useRef<Gesture>({ mode: 'none' });
 
-  const [tool, setTool] = useState<Tool>('rect');
-  const toolRef = useRef<Tool>('rect');
+  const [tool, setTool] = useState<Tool>(initialTool);
+  const toolRef = useRef<Tool>(tool);
   const [thickness, setThickness] = useState(28);
   const thicknessRef = useRef(28);
   const [shapeCount, setShapeCount] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [zoomPct, setZoomPct] = useState(100);
   const [helpOpen, setHelpOpen] = useState(false);
+  const helpWrapRef = useRef<HTMLDivElement | null>(null);
   const brushHoverRef = useRef<Point | null>(null);
+
+  // Dismiss help when tapping/clicking outside the ⓘ control + popover.
+  useEffect(() => {
+    if (!helpOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const el = helpWrapRef.current;
+      if (el && !el.contains(e.target as Node)) setHelpOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [helpOpen]);
 
   // ---- OCR tap/drag-to-redact (assist on top of manual tools) -----------
   const ocrWordsRef = useRef<OcrWord[]>([]);
@@ -1064,6 +1101,10 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   const interactive = loaded && !disabled && !submitted;
   const interactiveRef = useRef(interactive);
   useEffect(() => { interactiveRef.current = interactive; }, [interactive]);
+  /** Ready/Unready stays available while stamped Ready (tools stay locked). */
+  const canToggleReady = loaded && !disabled;
+  const canToggleReadyRef = useRef(canToggleReady);
+  useEffect(() => { canToggleReadyRef.current = canToggleReady; }, [canToggleReady]);
 
   // ---- pointer handlers --------------------------------------------------
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -1195,8 +1236,17 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     // base already holds image + all committed shapes at natural resolution.
     const png = base.toDataURL('image/png');
     clearSaved();
-    onSubmit(png);
+    onSubmit(png, shapesRef.current.length);
   }, [onSubmit, clearSaved]);
+
+  const handleUnsubmit = useCallback(() => {
+    onUnsubmit?.();
+  }, [onUnsubmit]);
+
+  const toggleReady = useCallback(() => {
+    if (submitted) handleUnsubmit();
+    else handleSubmit();
+  }, [submitted, handleSubmit, handleUnsubmit]);
 
   // Timer-driven auto-submit: fire once whenever flushToken changes to a truthy value.
   // If the image isn't loaded yet, keep a pending flag so we flush as soon as it is
@@ -1213,7 +1263,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     handleSubmit();
   }, [flushToken, loaded, submitted, handleSubmit]);
 
-  // Once the server confirms our submission, drop the autosave.
+  // Once the server confirms Ready, drop the autosave (draft returns if they Unready).
   useEffect(() => { if (submitted) clearSaved(); }, [submitted, clearSaved]);
 
   // Editor keyboard shortcuts (mounted only during the redaction round).
@@ -1259,27 +1309,24 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         return;
       }
 
+      // Ready / Unready — works even while stamped Ready (tools stay locked).
+      if (e.key === 'Enter' && (mod || !e.altKey)) {
+        if (modalOpen() || !canToggleReadyRef.current) return;
+        if (!mod) {
+          const el = document.activeElement as HTMLElement | null;
+          if (el && (el.tagName === 'BUTTON' || el.tagName === 'A' || el.closest('button, a, [role="button"]'))) return;
+        }
+        e.preventDefault();
+        toggleReady();
+        return;
+      }
+
       if (!editorLive()) return;
 
       // Undo (same as Undo button — pops last shape).
       if (mod && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         undo();
-        return;
-      }
-
-      // Submit
-      if (e.key === 'Enter' && mod) {
-        e.preventDefault();
-        handleSubmit();
-        return;
-      }
-      if (e.key === 'Enter' && !mod && !e.altKey) {
-        const el = document.activeElement as HTMLElement | null;
-        // Don't steal Enter from focused buttons/links (or JoinScreen forms — editor isn't mounted there).
-        if (el && (el.tagName === 'BUTTON' || el.tagName === 'A' || el.closest('button, a, [role="button"]'))) return;
-        e.preventDefault();
-        handleSubmit();
         return;
       }
 
@@ -1310,7 +1357,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [undo, handleSubmit, cancelInProgress, helpOpen]);
+  }, [undo, toggleReady, cancelInProgress, helpOpen]);
 
   const remaining = max != null ? Math.max(0, max - shapeCount) : null;
   const limitTone = remaining === 0
@@ -1327,7 +1374,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         : 'crosshair';
 
   const wordsStatus =
-    ocrState === 'loading' ? '🔎 Reading the copy…'
+    ocrState === 'loading' ? '🔎 Detecting text…'
     : ocrState === 'ready' ? `${ocrWordsRef.current.length} words · tap to toggle, drag to hide`
     : ocrState === 'empty' ? 'No text found — retry or use Box / Brush'
     : ocrState === 'error' ? 'Reader paused — retry or use Box / Brush'
@@ -1340,7 +1387,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     'Straight lines / squares: hold Shift (or the Straight toggle)\n' +
     'Tap-text: tap a word to hide/reveal, drag across to hide a range\n' +
     'Shortcuts — Ctrl/Cmd+Z undo · 1/B Box · 2/M Marker · 3/T Tap text · 4/E Eraser\n' +
-    '[ ] or −/+ Marker thickness · Ctrl/Cmd+Enter (or Enter) Submit · Esc cancel draw';
+    '[ ] or −/+ Marker thickness · Ctrl/Cmd+Enter (or Enter) Ready/Unready · Esc cancel draw';
 
   const tools: { id: Tool; icon: string; label: string }[] = [
     { id: 'rect', icon: '▭', label: 'Box' },
@@ -1438,7 +1485,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
             </button>
           </div>
           {wordsStatus && (
-            <span className="hidden lg:inline text-[10px] leading-snug text-ink2 max-w-[14rem] truncate" title={wordsStatus}>
+            <span className="hidden lg:inline font-slab text-xs font-bold leading-snug text-ink max-w-[14rem] truncate" title={wordsStatus}>
               {wordsStatus}
             </span>
           )}
@@ -1460,10 +1507,13 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     </div>
   );
 
+  // Must sit outside overflow-x-auto: that axis forces y clipping too, so a
+  // bottom-full popover looked like a no-op click (state toggled, panel hidden).
   const helpPopover = helpOpen && (
     <div
-      role="tooltip"
-      className="absolute z-20 left-1/2 -translate-x-1/2 bottom-full mb-2 w-[min(20rem,78vw)] card p-3 text-left shadow-clip text-xs leading-relaxed text-ink2"
+      role="dialog"
+      aria-label="Editor controls"
+      className="absolute z-40 left-1/2 -translate-x-1/2 bottom-full mb-2 w-[min(20rem,calc(100vw-1.5rem))] max-h-[min(70dvh,24rem)] overflow-y-auto themed-scroll card p-3 text-left shadow-clip text-xs leading-relaxed text-ink2"
     >
       <div className="kicker text-[10px] mb-1">Editor controls</div>
       {controlsHint.split('\n').map((line) => (
@@ -1511,11 +1561,26 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
           {!loaded && (
             <div className="absolute inset-0 grid place-items-center text-ink2 text-sm">Setting the type…</div>
           )}
+          {tool === 'words' && ocrState === 'loading' && (
+            <div
+              className="absolute inset-0 z-10 grid place-items-center pointer-events-none"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[3px] border-2 border-ink bg-papercard/90 shadow-clip">
+                <span
+                  className="inline-block w-5 h-5 shrink-0 rounded-full border-2 border-ink/25 border-t-grief animate-spin"
+                  aria-hidden="true"
+                />
+                <span className="font-slab font-bold uppercase tracking-wide text-sm text-ink">Detecting text…</span>
+              </div>
+            </div>
+          )}
           {submitted && (
             <div className="absolute inset-0 grid place-items-center bg-paper/70 backdrop-blur-[1px]">
               <div className="text-center">
-                <div className="stamp text-2xl animate-stamp-in">Submitted</div>
-                <div className="text-ink2 text-sm mt-3 italic">Sent to the desk — awaiting the reveal…</div>
+                <div className="stamp text-2xl animate-stamp-in">Ready</div>
+                <div className="text-ink2 text-sm mt-3 italic">Waiting for everyone — tap Unready to keep editing</div>
               </div>
             </div>
           )}
@@ -1535,16 +1600,19 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
         )}
       </div>
 
-      {/* Bottom bar — sub-controls + zoom centered under canvas; Submit bottom-right */}
+      {/* Bottom bar — sub-controls + zoom centered under canvas; Ready bottom-right */}
       <div className="shrink-0 grid grid-cols-[1fr_auto] md:grid-cols-[8.75rem_1fr_auto] lg:grid-cols-[9.75rem_1fr_auto] items-center gap-x-2 sm:gap-x-2.5 gap-y-1.5 min-h-[2.75rem] pt-0.5 min-w-0">
         {/* Spacer matching desktop palette width so center cluster sits under the stage */}
         <div className="hidden md:block" aria-hidden="true" />
 
-        <div className="flex items-center justify-center gap-1.5 sm:gap-2 min-w-0 overflow-x-auto themed-scroll col-span-1 md:col-span-1">
-          {bottomModifiers}
+        <div className="flex items-center justify-center gap-1.5 sm:gap-2 min-w-0 col-span-1 md:col-span-1">
+          {/* Only tool modifiers scroll; zoom/help stay unclipped so the popover can open upward. */}
+          <div className="flex items-center justify-end gap-1.5 sm:gap-2 min-w-0 overflow-x-auto themed-scroll">
+            {bottomModifiers}
+          </div>
           {zoomControl}
 
-          <div className="relative shrink-0">
+          <div ref={helpWrapRef} className="relative shrink-0">
             <button
               type="button"
               onClick={() => setHelpOpen((open) => !open)}
@@ -1562,8 +1630,13 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
           </span>
         </div>
 
-        <button onClick={handleSubmit} disabled={!interactive} className="btn-primary !py-2 sm:!py-2.5 shrink-0 justify-self-end">
-          {submitted ? 'Submitted ✓' : 'Submit →'}
+        <button
+          type="button"
+          onClick={toggleReady}
+          disabled={!canToggleReady}
+          className={`!py-2 sm:!py-2.5 shrink-0 justify-self-end ${submitted ? 'btn-secondary' : 'btn-primary'}`}
+        >
+          {submitted ? 'Unready' : 'Ready →'}
         </button>
       </div>
     </div>

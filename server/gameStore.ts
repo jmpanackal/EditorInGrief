@@ -87,7 +87,7 @@ const HOST_GRACE_MS = 30000;
 
 const DEFAULT_ROUND_SETTINGS: RoundSettings = {
   maxRedactions: null,
-  timerMode: 'normal',
+  timerMode: 'auto',
   customSeconds: TIMER_NORMAL_SECONDS,
   untimed: false,
 };
@@ -95,8 +95,8 @@ const DEFAULT_ROUND_SETTINGS: RoundSettings = {
 const TIMER_MODES: ReadonlySet<TimerMode> = new Set(['quick', 'normal', 'long', 'auto', 'custom']);
 
 /** The Lobby's source shelf always shows at least this many candidates —
- * real uploads first, wire-bank "filler" sources (Source.uploadedBy = null)
- * padding the rest. Fillers shrink to nothing once uploads reach the floor. */
+ * real uploads plus wire-bank "filler" sources (Source.uploadedBy = null)
+ * topping up when under the floor. Uploads never auto-displace fillers. */
 const MIN_SHELF_SOURCES = 2;
 
 export class GameStore {
@@ -250,6 +250,7 @@ export class GameStore {
     if (room.state.selectedSourceId && removedSourceIds.has(room.state.selectedSourceId)) {
       room.state.selectedSourceId = null;
     }
+    this.reconcileSelectedSource(room);
 
     this.maybeAutoReveal(room);
   }
@@ -324,7 +325,7 @@ export class GameStore {
     if ('maxRedactions' in settings) {
       const v = settings.maxRedactions;
       // Clamp to a sane positive range; null/invalid = unlimited.
-      next.maxRedactions = v == null || !Number.isFinite(v) || v <= 0 ? null : Math.min(99, Math.floor(v));
+      next.maxRedactions = v == null || !Number.isFinite(v) || v <= 0 ? null : Math.min(100, Math.floor(v));
     }
     if ('timerMode' in settings && settings.timerMode != null && TIMER_MODES.has(settings.timerMode)) {
       next.timerMode = settings.timerMode;
@@ -376,6 +377,7 @@ export class GameStore {
     // always is once any filler exists).
     room.state.pendingSources.push({ ...source });
     this.syncFillerSlots(room);
+    this.reconcileSelectedSource(room);
     this.broadcast(room.state.code);
   }
 
@@ -395,7 +397,8 @@ export class GameStore {
     // deleting it from the registry here would remove it globally forever.
     // "Remove" on a filler card is really "shuffle" (syncFillerSlots below
     // immediately repicks a replacement), so the seed itself must survive.
-    if (pending.uploadedBy != null) this.sources.delete(pending.id);
+    const isFiller = pending.uploadedBy == null;
+    if (!isFiller) this.sources.delete(pending.id);
     const next = room.state.pendingSources.slice();
     next.splice(index, 1);
     room.state.pendingSources = next;
@@ -403,10 +406,16 @@ export class GameStore {
       if (votedId === sourceId) delete room.state.sourceVotes[voterId];
     }
     if (room.state.selectedSourceId === sourceId) room.state.selectedSourceId = null;
-    // Backfill (if needed) at the vacated index — keeps every OTHER card's
-    // slot stable, so shuffling/removing one card never visibly touches
-    // its neighbor (see syncFillerSlots).
-    this.syncFillerSlots(room, { insertAt: index });
+    // Shuffle always replaces the vacated filler (even when uploads already
+    // meet MIN_SHELF_SOURCES). Removing a real upload only tops up if the
+    // shelf dipped below the floor. Prefer a different seed than the one
+    // just shuffled away when the bank still has unused options.
+    this.syncFillerSlots(room, {
+      insertAt: index,
+      minAdd: isFiller ? 1 : 0,
+      alsoExclude: isFiller ? [sourceId] : undefined,
+    });
+    this.reconcileSelectedSource(room);
     this.broadcast(room.state.code);
   }
 
@@ -416,23 +425,31 @@ export class GameStore {
     if (!room.state.players.some((p) => p.id === playerId)) throw new GameError('That player is no longer in the room.');
     if (sourceId == null) {
       delete room.state.sourceVotes[playerId];
+      this.reconcileSelectedSource(room);
       this.broadcast(room.state.code);
       return;
     }
     if (!room.state.pendingSources.some((source) => source.id === sourceId)) throw new GameError('That image is no longer available.');
     room.state.sourceVotes[playerId] = sourceId;
+    this.reconcileSelectedSource(room);
     this.broadcast(room.state.code);
   }
 
   selectSource(code: string, playerId: string, sourceId: string | null): void {
     const room = this.requireHost(code, playerId);
     if (room.state.phase !== 'lobby') throw new GameError('Choose the next image while in the lobby.');
-    // Validate against the full registry (seed bank + every upload ever seen),
-    // not just this room's pendingSources — lets the host lock in a seed-bank
-    // pick too (the Lobby's "shuffle a wire photo" affordance), not only an
-    // uploaded one.
-    if (sourceId != null && !this.sources.has(sourceId)) {
-      throw new GameError('That image is no longer available.');
+    const { maxVotes, ids: topIds } = this.topVotedSourceIds(room);
+    // Unique most-voted winner is locked — host cannot override with a lower-voted image.
+    if (maxVotes > 0 && topIds.length === 1) {
+      room.state.selectedSourceId = topIds[0];
+      this.broadcast(room.state.code);
+      return;
+    }
+    // Tie (including all-zero shelf): host may only pick among the tied tops.
+    if (sourceId != null) {
+      if (!topIds.includes(sourceId) || !this.sources.has(sourceId)) {
+        throw new GameError('You can only choose among images tied for most votes.');
+      }
     }
     room.state.selectedSourceId = sourceId;
     this.broadcast(room.state.code);
@@ -501,14 +518,20 @@ export class GameStore {
     this.broadcast(room.state.code);
   }
 
-  submit(code: string, playerId: string, roundId: string, editedImageUrl: string): void {
+  submit(
+    code: string,
+    playerId: string,
+    roundId: string,
+    editedImageUrl: string,
+    editCount: number,
+  ): void {
     const room = this.requireRoom(code);
     const round = room.state.currentRound;
     if (!round || round.id !== roundId) return; // stale submit; ignore
 
     // Active redaction: normal submit (+ overwrite until reveal).
     if (room.state.phase === 'round') {
-      this.upsertSubmission(round, playerId, editedImageUrl);
+      this.upsertSubmission(round, playerId, editedImageUrl, editCount);
       this.maybeAutoReveal(room);
       this.broadcast(room.state.code);
       return;
@@ -519,9 +542,25 @@ export class GameStore {
     if (room.state.phase === 'reveal') {
       const existing = round.submissions.find((s) => s.playerId === playerId);
       if (existing) return;
-      this.upsertSubmission(round, playerId, editedImageUrl);
+      this.upsertSubmission(round, playerId, editedImageUrl, editCount);
       this.broadcast(room.state.code);
     }
+  }
+
+  /**
+   * Ready → Unready during an active round. Removes this player's submission so
+   * they can keep editing. Timed rounds only end early when *everyone* is Ready
+   * again ({@link maybeAutoReveal}).
+   */
+  unsubmit(code: string, playerId: string, roundId: string): void {
+    const room = this.requireRoom(code);
+    const round = room.state.currentRound;
+    if (!round || round.id !== roundId) return;
+    if (room.state.phase !== 'round') return;
+    const idx = round.submissions.findIndex((s) => s.playerId === playerId);
+    if (idx < 0) return;
+    round.submissions.splice(idx, 1);
+    this.broadcast(room.state.code);
   }
 
   advanceReveal(code: string, playerId: string, direction: 1 | -1 = 1): void {
@@ -550,14 +589,18 @@ export class GameStore {
     this.broadcast(room.state.code);
   }
 
-  castVote(code: string, playerId: string, submissionId: string): void {
+  castVote(code: string, playerId: string, submissionId: string | null): void {
     const room = this.requireRoom(code);
     const round = room.state.currentRound;
     if (!round || room.state.phase !== 'voting' || !round.votingEnabled) return;
-    const target = round.submissions.find((s) => s.id === submissionId);
-    if (!target) return;
-    if (target.playerId === playerId) return; // can't vote for yourself
-    round.votes[playerId] = submissionId;
+    if (submissionId == null) {
+      delete round.votes[playerId];
+    } else {
+      const target = round.submissions.find((s) => s.id === submissionId);
+      if (!target) return;
+      if (target.playerId === playerId) return; // can't vote for yourself
+      round.votes[playerId] = submissionId;
+    }
     // recompute counts
     for (const s of round.submissions) s.votesCount = 0;
     for (const chosen of Object.values(round.votes)) {
@@ -567,7 +610,7 @@ export class GameStore {
     this.broadcast(room.state.code);
   }
 
-  /** Scoreboard: toggle an emoji reaction on a filed edit (synced). */
+  /** Reveal / scoreboard: toggle an emoji reaction on a filed edit (synced). */
   react(
     code: string,
     playerId: string,
@@ -576,7 +619,7 @@ export class GameStore {
   ): void {
     const room = this.requireRoom(code);
     const round = room.state.currentRound;
-    if (!round || room.state.phase !== 'scoreboard') return;
+    if (!round || (room.state.phase !== 'reveal' && room.state.phase !== 'scoreboard')) return;
     if (!(VERDICT_REACTION_EMOJIS as readonly string[]).includes(emoji)) return;
     if (!round.submissions.some((s) => s.id === submissionId)) return;
     if (!round.reactions) round.reactions = {};
@@ -608,14 +651,40 @@ export class GameStore {
 
   returnToLobby(code: string, playerId: string): void {
     const room = this.requireHost(code, playerId);
+    // Capture before we null the round — Play again should retire the image
+    // that just ran so it doesn't sit on the next shelf.
+    const playedId =
+      room.state.currentSource?.id ?? room.state.currentRound?.sourceId ?? null;
+
     room.state.phase = 'lobby';
     room.state.currentRound = null;
     room.state.currentSource = null;
     this.clearPhaseTimers(room);
-    // Fresh wire-photo suggestions each time the table's back deciding what's
-    // next — a filler is a suggestion, not a filing, so it doesn't linger
-    // stale across rounds the way a real upload does.
-    this.syncFillerSlots(room, { refresh: true });
+
+    if (playedId) {
+      const index = room.state.pendingSources.findIndex((s) => s.id === playedId);
+      if (index !== -1) {
+        const pending = room.state.pendingSources[index];
+        // Real uploads leave the pool for good; seed fillers stay in the
+        // global registry (shared across rooms) and only leave this shelf.
+        if (pending.uploadedBy != null) this.sources.delete(pending.id);
+        const next = room.state.pendingSources.slice();
+        next.splice(index, 1);
+        room.state.pendingSources = next;
+      }
+      for (const [voterId, votedId] of Object.entries(room.state.sourceVotes)) {
+        if (votedId === playedId) delete room.state.sourceVotes[voterId];
+      }
+      if (room.state.selectedSourceId === playedId) room.state.selectedSourceId = null;
+    }
+
+    // Fresh wire-photo suggestions; exclude the just-played seed so refresh
+    // doesn't immediately re-offer it when the bank still has alternatives.
+    this.syncFillerSlots(room, {
+      refresh: true,
+      alsoExclude: playedId ? [playedId] : undefined,
+    });
+    this.reconcileSelectedSource(room);
     this.broadcast(room.state.code);
   }
 
@@ -643,10 +712,17 @@ export class GameStore {
     }, round.timerSeconds * 1000 + AUTO_SUBMIT_GRACE_MS);
   }
 
-  private upsertSubmission(round: Round, playerId: string, editedImageUrl: string): void {
+  private upsertSubmission(
+    round: Round,
+    playerId: string,
+    editedImageUrl: string,
+    editCount: number,
+  ): void {
+    const count = sanitizeEditCount(editCount);
     const existing = round.submissions.find((s) => s.playerId === playerId);
     if (existing) {
       existing.editedImageUrl = editedImageUrl; // allow overwrite until reveal
+      existing.editCount = count;
       return;
     }
     const submission: Submission = {
@@ -654,6 +730,7 @@ export class GameStore {
       roundId: round.id,
       playerId,
       editedImageUrl,
+      editCount: count,
       votesCount: 0,
     };
     round.submissions.push(submission);
@@ -674,21 +751,57 @@ export class GameStore {
     this.clearPhaseTimers(room);
   }
 
-  private pickSource(room: Room, sourceId?: string): Source | undefined {
-    if (sourceId && this.sources.has(sourceId)) return this.sources.get(sourceId);
-    if (room.state.selectedSourceId && this.sources.has(room.state.selectedSourceId)) {
-      return this.sources.get(room.state.selectedSourceId);
-    }
-    // When the host has not picked, choose the room's most-voted filed image.
+  /** Sources currently tied for the highest vote count on the shelf.
+   * When nobody has voted (maxVotes === 0), every pending source is "tied". */
+  private topVotedSourceIds(room: Room): { maxVotes: number; ids: string[] } {
     const voteCounts = new Map<string, number>();
-    for (const sourceId of Object.values(room.state.sourceVotes)) {
-      voteCounts.set(sourceId, (voteCounts.get(sourceId) ?? 0) + 1);
+    for (const votedId of Object.values(room.state.sourceVotes)) {
+      voteCounts.set(votedId, (voteCounts.get(votedId) ?? 0) + 1);
     }
-    const voted = room.state.pendingSources
-      .map((source) => ({ source, votes: voteCounts.get(source.id) ?? 0 }))
-      .filter((entry) => entry.votes > 0)
-      .sort((a, b) => b.votes - a.votes || a.source.createdAt - b.source.createdAt)[0]?.source;
-    if (voted && this.sources.has(voted.id)) return this.sources.get(voted.id);
+    let maxVotes = 0;
+    for (const source of room.state.pendingSources) {
+      maxVotes = Math.max(maxVotes, voteCounts.get(source.id) ?? 0);
+    }
+    const ids = room.state.pendingSources
+      .filter((source) => (voteCounts.get(source.id) ?? 0) === maxVotes)
+      .map((source) => source.id);
+    return { maxVotes, ids };
+  }
+
+  /** Lock a unique most-voted winner; drop a host pick that fell out of the tied set. */
+  private reconcileSelectedSource(room: Room): void {
+    const { maxVotes, ids } = this.topVotedSourceIds(room);
+    if (maxVotes > 0 && ids.length === 1) {
+      room.state.selectedSourceId = ids[0];
+      return;
+    }
+    if (room.state.selectedSourceId != null && !ids.includes(room.state.selectedSourceId)) {
+      room.state.selectedSourceId = null;
+    }
+  }
+
+  private pickSource(room: Room, sourceId?: string): Source | undefined {
+    this.reconcileSelectedSource(room);
+    const { maxVotes, ids: topIds } = this.topVotedSourceIds(room);
+    const requested = sourceId ?? room.state.selectedSourceId ?? undefined;
+
+    // Unique most-voted winner always wins — ignore any lower-voted request.
+    if (maxVotes > 0 && topIds.length === 1) {
+      return this.sources.get(topIds[0]);
+    }
+
+    // Tie with real votes: host must break it by choosing one of the tied tops.
+    if (maxVotes > 0 && topIds.length > 1) {
+      if (requested && topIds.includes(requested) && this.sources.has(requested)) {
+        return this.sources.get(requested);
+      }
+      throw new GameError('Images are tied for most votes — choose one to break the tie.');
+    }
+
+    // No votes yet: honor a host pick among the shelf, else random from the shelf.
+    if (requested && topIds.includes(requested) && this.sources.has(requested)) {
+      return this.sources.get(requested);
+    }
     // Prefer the room's OWN shelf (what's actually on screen — real uploads +
     // wire-photo fillers) over the entire cross-room source registry; falls
     // back to the registry only if the shelf is somehow empty (shouldn't
@@ -711,17 +824,30 @@ export class GameStore {
    * fillers in at that index instead of appending at the end — used after a
    * removal so the backfill lands in the vacated slot and every OTHER card
    * keeps its exact position (shuffling one card must never visibly move or
-   * change its neighbor). */
-  private syncFillerSlots(room: Room, opts: { refresh?: boolean; insertAt?: number } = {}): void {
+   * change its neighbor). `minAdd` forces at least that many new fillers
+   * (shuffle always replaces the removed filler even when the shelf already
+   * meets the floor because of player uploads). */
+  private syncFillerSlots(
+    room: Room,
+    opts: { refresh?: boolean; insertAt?: number; minAdd?: number; alsoExclude?: string[] } = {},
+  ): void {
     let pending = room.state.pendingSources;
     if (opts.refresh) pending = pending.filter((s) => s.uploadedBy != null);
     const shortfall = Math.max(0, MIN_SHELF_SOURCES - pending.length);
-    if (shortfall === 0) {
+    const toAdd = Math.max(shortfall, opts.minAdd ?? 0);
+    if (toAdd === 0) {
       room.state.pendingSources = pending;
       return;
     }
     const shownIds = new Set(pending.map((s) => s.id));
-    const added = this.pickDistinctSeeds(room, shortfall, shownIds);
+    for (const id of opts.alsoExclude ?? []) shownIds.add(id);
+    const added = this.pickDistinctSeeds(room, toAdd, shownIds);
+    // Tiny bank: if soft-excluding the shuffled-away seed left us short, allow it back.
+    if (added.length < toAdd) {
+      const hardOnly = new Set(pending.map((s) => s.id));
+      for (const src of added) hardOnly.add(src.id);
+      added.push(...this.pickDistinctSeeds(room, toAdd - added.length, hardOnly));
+    }
     const at = opts.insertAt != null ? Math.min(Math.max(0, opts.insertAt), pending.length) : pending.length;
     const next = pending.slice();
     next.splice(at, 0, ...added);
@@ -794,15 +920,21 @@ function cleanNick(nickname: string): string {
   return trimmed || 'Player';
 }
 
+/** Non-negative integer shape count from the client editor; legacy/missing → 0. */
+function sanitizeEditCount(n: unknown): number {
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return 0;
+  return Math.min(500, Math.floor(n));
+}
+
 /** Coerce legacy or partial settings into the current RoundSettings shape. */
 function normalizeRoundSettings(raw: RoundSettings & Record<string, unknown>): RoundSettings {
   const maxRaw = raw?.maxRedactions;
   const maxRedactions =
     maxRaw == null || !Number.isFinite(maxRaw) || (maxRaw as number) <= 0
       ? null
-      : Math.min(99, Math.floor(maxRaw as number));
+      : Math.min(100, Math.floor(maxRaw as number));
 
-  let timerMode: TimerMode = 'normal';
+  let timerMode: TimerMode = 'auto';
   if (raw?.timerMode && TIMER_MODES.has(raw.timerMode as TimerMode)) {
     timerMode = raw.timerMode as TimerMode;
   } else if (raw && 'quickFire' in raw && raw.quickFire) {

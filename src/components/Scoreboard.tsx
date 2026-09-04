@@ -96,7 +96,7 @@ export function Scoreboard({ room }: { room: RoomApi }) {
               </p>
             )}
           </div>
-          <div className="justify-self-end min-w-0">
+          <div className="hidden md:block justify-self-end min-w-0">
             {latestRecap && <RoundDownload recap={latestRecap} code={state.code} />}
           </div>
         </div>
@@ -143,6 +143,7 @@ type VerdictItem = {
   src: string;
   alt: string;
   label: string;
+  editCount?: number;
   votes?: number;
   isWinner?: boolean;
   dashed?: boolean;
@@ -176,6 +177,7 @@ function VerdictGallery({
       src: s.editedImageUrl,
       alt: `${p?.nickname ?? 'Player'}'s redaction`,
       label: p?.nickname ?? '—',
+      editCount: s.editCount ?? 0,
       votes: voting ? s.votesCount : undefined,
       isWinner,
     };
@@ -253,6 +255,7 @@ function VerdictClip({
   src,
   alt,
   label,
+  editCount,
   votes,
   isWinner = false,
   dashed = false,
@@ -296,6 +299,15 @@ function VerdictClip({
           Extra!
         </span>
       )}
+      {/* Same ♥ badge as lobby source-shelf voting — compact overlay, top-right of image. */}
+      {votes !== undefined && (
+        <span
+          className="absolute top-2 right-2 z-10 inline-flex items-center justify-center gap-0.5 min-w-[2.25rem] h-8 px-2 rounded-full bg-grief text-paper border-2 border-ink text-sm font-extrabold leading-none shadow-clip tabular-nums"
+          aria-label={`${votes} votes`}
+        >
+          ♥ {votes}
+        </span>
+      )}
       <div
         className={
           fit
@@ -324,15 +336,23 @@ function VerdictClip({
               : 'border-ink'
         }`}
       >
-        <span
-          className={`truncate min-w-0 shrink ${
-            featured
-              ? 'font-display font-black tracking-wide uppercase text-base sm:text-lg'
-              : 'font-display font-black text-lg sm:text-xl'
-          }`}
-        >
-          {label}
-        </span>
+        <div className="min-w-0 shrink flex flex-col gap-0.5">
+          <span
+            className={`truncate ${
+              featured
+                ? 'font-display font-black tracking-wide uppercase text-base sm:text-lg'
+                : 'font-display font-black text-lg sm:text-xl'
+            }`}
+          >
+            {label}
+          </span>
+          {/* Byline under nickname — clear of ♥ badge, EXTRA stamp, and reaction pills. */}
+          {editCount != null && !featured && (
+            <span className="kicker text-[10px] sm:text-[11px] text-ink3 tracking-wide tabular-nums">
+              {editCount} edit{editCount === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
         {showReactions && (
           <div className="flex items-center gap-1 ml-auto shrink-0">
             {VERDICT_REACTION_EMOJIS.map((emoji) => {
@@ -344,7 +364,7 @@ function VerdictClip({
                   key={emoji}
                   type="button"
                   onClick={() => onReact!(submissionId!, emoji)}
-                  className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-sm leading-none transition-colors ${
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 leading-none transition-colors ${
                     mine
                       ? 'border-grief bg-grief/10'
                       : 'border-ink/20 bg-papercard hover:border-ink/50'
@@ -353,23 +373,16 @@ function VerdictClip({
                   aria-pressed={mine}
                   title={emoji}
                 >
-                  <span aria-hidden>{emoji}</span>
+                  <span aria-hidden className="text-lg">
+                    {emoji}
+                  </span>
                   {count > 0 && (
-                    <span className="tabular-nums text-[11px] font-bold text-ink2">{count}</span>
+                    <span className="tabular-nums text-xs font-bold text-ink2">{count}</span>
                   )}
                 </button>
               );
             })}
           </div>
-        )}
-        {votes !== undefined && (
-          <span
-            className={`tabular-nums font-display font-black text-base sm:text-lg text-grief shrink-0 ${
-              showReactions ? '' : 'ml-auto'
-            }`}
-          >
-            ♥{votes}
-          </span>
         )}
       </div>
     </div>

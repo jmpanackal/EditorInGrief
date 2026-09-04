@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CUSTOM_TIMER_MAX,
   CUSTOM_TIMER_MIN,
@@ -28,24 +28,53 @@ const LENGTH_OPTIONS: { mode: TimerMode; label: string; sub: string }[] = [
   { mode: 'custom', label: 'Custom', sub: 'pick' },
 ];
 
+/** Default when turning the redaction cap on from unlimited. */
+const DEFAULT_REDACTION_CAP = 10;
+const REDACTION_CAP_MIN = 1;
+const REDACTION_CAP_MAX = 100;
+
 /** Below this many connected players, Start prompts a "you sure?" confirm —
  * the game technically works solo, but reveal/voting need company to shine. */
 const SOLO_WARNING_THRESHOLD = 2;
 
 type LobbyTab = 'source' | 'settings';
 
+function clampRedactionCap(n: number): number {
+  return Math.max(REDACTION_CAP_MIN, Math.min(REDACTION_CAP_MAX, Math.floor(n)));
+}
+
 export function Lobby({ room }: { room: RoomApi }) {
   const state = room.state!;
   const settings = state.roundSettings;
   const connectedCount = state.players.filter((p) => p.connected).length;
-  const canStart = connectedCount >= 1;
   const [showSoloConfirm, setShowSoloConfirm] = useState(false);
   const [tab, setTab] = useState<LobbyTab>('source');
+  // Remember last capped value so toggling Off→On restores a sensible number.
+  const [lastCap, setLastCap] = useState(() =>
+    settings.maxRedactions != null ? clampRedactionCap(settings.maxRedactions) : DEFAULT_REDACTION_CAP,
+  );
 
-  const limit = settings.maxRedactions ?? 0;
-  const setLimit = (n: number) => {
-    const v = Math.max(0, Math.min(99, Math.floor(n)));
-    room.setRoundSettings({ maxRedactions: v > 0 ? v : null });
+  const capped = settings.maxRedactions != null;
+  const capValue = capped ? clampRedactionCap(settings.maxRedactions!) : lastCap;
+
+  useEffect(() => {
+    if (settings.maxRedactions != null) setLastCap(clampRedactionCap(settings.maxRedactions));
+  }, [settings.maxRedactions]);
+
+  const setRedactionCapped = (on: boolean) => {
+    if (on) {
+      const v = clampRedactionCap(lastCap || DEFAULT_REDACTION_CAP);
+      setLastCap(v);
+      room.setRoundSettings({ maxRedactions: v });
+    } else {
+      room.setRoundSettings({ maxRedactions: null });
+    }
+  };
+
+  const setCapValue = (n: number) => {
+    const v = clampRedactionCap(n);
+    setLastCap(v);
+    room.setRoundSettings({ maxRedactions: v });
   };
 
   const setSettings = (partial: Partial<RoundSettings>) => room.setRoundSettings(partial);
@@ -54,45 +83,59 @@ export function Lobby({ room }: { room: RoomApi }) {
     room.setMaxPlayers(Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, n)));
   };
 
-  const handleStartClick = () => {
-    if (connectedCount < SOLO_WARNING_THRESHOLD) { setShowSoloConfirm(true); return; }
-    room.startRound();
-  };
-
   // Under the new "always ≥2 candidates" shelf, a selection (real or a
   // wire-photo filler) is always literally IN pendingSources — see
   // gameStore.syncFillerSlots — so a single lookup covers both.
   const seedBank = useSeedBank();
   const selectedSource = state.selectedSourceId ? state.pendingSources.find((source) => source.id === state.selectedSourceId) : null;
-  const wordCount = selectedSource?.wordCount ?? 0;
+
+  // Most-voted wins; host only breaks a tie among the leading images.
+  const votedCounts = new Map<string, number>();
+  for (const sid of Object.values(state.sourceVotes)) votedCounts.set(sid, (votedCounts.get(sid) ?? 0) + 1);
+  const maxVotes = state.pendingSources.reduce(
+    (max, source) => Math.max(max, votedCounts.get(source.id) ?? 0),
+    0,
+  );
+  const leadingSources = state.pendingSources.filter((s) => (votedCounts.get(s.id) ?? 0) === maxVotes);
+  const isVoteTie = leadingSources.length > 1;
+  const uniqueWinner = maxVotes > 0 && leadingSources.length === 1 ? leadingSources[0] : null;
+  const needsTiebreak = maxVotes > 0 && isVoteTie && !selectedSource;
+  const canStart = connectedCount >= 1 && !needsTiebreak;
+
+  const nextSource = uniqueWinner ?? selectedSource;
+  const wordCount = nextSource?.wordCount ?? 0;
   const autoEstimate = wordCount > 0 ? computeTimerSeconds(wordCount) : null;
   const resolvedPreview = resolveRoundTimerSeconds(settings, wordCount);
   const lengthDisabled = settings.untimed;
 
-  // What Start Editing will actually use — mirrors the server's pickSource
-  // priority (explicit host pick > most-voted > random from the shelf) so
-  // the host never has to guess what "Start" is about to do.
-  const votedCounts = new Map<string, number>();
-  for (const sid of Object.values(state.sourceVotes)) votedCounts.set(sid, (votedCounts.get(sid) ?? 0) + 1);
-  const topVoted = state.pendingSources
-    .map((s) => ({ source: s, votes: votedCounts.get(s.id) ?? 0 }))
-    .filter((entry) => entry.votes > 0)
-    .sort((a, b) => b.votes - a.votes || a.source.createdAt - b.source.createdAt)[0]?.source;
+  const handleStartClick = () => {
+    if (connectedCount < SOLO_WARNING_THRESHOLD) { setShowSoloConfirm(true); return; }
+    room.startRound();
+  };
+
   const ownerName = (playerId: string | null) => state.players.find((p) => p.id === playerId)?.nickname ?? 'Someone';
   const seedLabel = (id: string) => seedBank.find((s) => s.id === id)?.label ?? 'a wire photo';
-  const describeSource = (source: NonNullable<typeof selectedSource>) =>
+  const describeSource = (source: NonNullable<typeof nextSource>) =>
     source.uploadedBy ? `filed by ${ownerName(source.uploadedBy)}` : `"${seedLabel(source.id)}"`;
   // On Round settings the shelf isn't visible — don't say "below".
-  const nextStoryLabel = selectedSource
-    ? `Host's pick — ${describeSource(selectedSource)}`
-    : topVoted
-      ? `Most-voted — ${describeSource(topVoted)}`
-      : tab === 'source'
-        ? 'Random pick from the shelf below'
-        : 'Random pick from the Source tab';
+  const nextStoryLabel = uniqueWinner
+    ? `Most-voted — ${describeSource(uniqueWinner)}`
+    : needsTiebreak
+      ? 'Tied for most votes — host must Choose one'
+      : selectedSource && isVoteTie
+        ? `Host tiebreak — ${describeSource(selectedSource)}`
+        : selectedSource
+          ? `Host's pick — ${describeSource(selectedSource)}`
+          : tab === 'source'
+            ? 'Random pick from the shelf below'
+            : 'Random pick from the Source tab';
 
   return (
-    <div className="grid gap-4 md:grid-cols-[340px_1fr] animate-fade-up">
+    // min-w-0: grid/flex children default to min-width:auto, so a wide Source
+    // shelf image can inflate this past <main>'s padded content box — left
+    // padding stays, right card border clips the viewport. Round settings is
+    // text-only and never hits that path.
+    <div className="grid gap-4 md:grid-cols-[340px_1fr] animate-fade-up min-w-0">
       {/* Left: the newsroom roster — Gartic puts players on the left, settings
           on the right. On narrow screens the Host's actual task (source /
           settings) comes first instead; the roster follows. Both columns are
@@ -103,7 +146,7 @@ export function Lobby({ room }: { room: RoomApi }) {
           the source-material card below). max-h + overflow-y-auto locally
           (here, and on the card) is simpler and doesn't have that failure
           mode. */}
-      <div className="order-2 md:order-1 flex flex-col gap-2">
+      <div className="order-2 md:order-1 flex flex-col gap-2 min-w-0">
         <div className="card p-3 flex flex-col gap-2">
           <div className="flex items-center justify-between pb-1.5 border-b border-ink/25">
             <div className="kicker text-sm">The Newsroom</div>
@@ -148,8 +191,8 @@ export function Lobby({ room }: { room: RoomApi }) {
           scroll. The Start-bar area below already swaps in an "Awaiting the
           Host…" line for non-hosts, so that's the one place this needs to
           say anything. */}
-      <div className="order-1 md:order-2 flex flex-col gap-3">
-        <div className="flex flex-col">
+      <div className="order-1 md:order-2 flex flex-col gap-3 min-w-0">
+        <div className="flex flex-col min-w-0">
           <div className="flex" role="tablist">
             <TabButton label="Source Material" active={tab === 'source'} onClick={() => setTab('source')} />
             <TabButton label="Round settings" active={tab === 'settings'} onClick={() => setTab('settings')} />
@@ -175,7 +218,7 @@ export function Lobby({ room }: { room: RoomApi }) {
               that doesn't fit. ~18.5rem covers the header, main padding,
               tab bar, "Next story" line and Start bar; shorter shelf
               thumbnails keep the 2-card base state near the fold. */}
-          <div className="card !rounded-tl-none -mt-px p-3 flex flex-col gap-2.5 md:h-[min(42rem,calc(100dvh_-_18.5rem))] md:overflow-y-auto themed-scroll">
+          <div className="card !rounded-tl-none -mt-px p-3 flex flex-col gap-2.5 min-w-0 md:h-[min(42rem,calc(100dvh_-_18.5rem))] md:overflow-y-auto themed-scroll">
             {tab === 'source' ? (
               // "Choose Today's Story" (inside SourceUpload's shelf) is
               // already the section title — an outer kicker here was just
@@ -189,57 +232,43 @@ export function Lobby({ room }: { room: RoomApi }) {
               // interactive) since only the host can change these.
               <div className={`flex flex-col gap-2.5 ${!room.isHost ? 'opacity-70' : ''}`}>
                 <SettingRow
-                  icon="🗳️"
-                  title="Voting"
-                  hint={state.votingEnabled ? 'On — a ballot follows every round' : 'Off — just for laughs'}
-                  control={<Toggle checked={state.votingEnabled} onChange={room.setVoting} disabled={!room.isHost} aria-label="Enable voting" />}
-                />
-
-                <SettingRow
                   icon="⏰"
-                  title="Deadline"
-                  hint={settings.untimed ? 'No deadline — file whenever ready' : 'Timed — a countdown applies'}
+                  title="Timed round"
+                  hint={
+                    settings.untimed
+                      ? 'Off — file when ready, no time limit'
+                      : 'On — round length countdown applies'
+                  }
                   control={
                     <Toggle
-                      checked={settings.untimed}
-                      onChange={(v) => setSettings({ untimed: v })}
+                      checked={!settings.untimed}
+                      onChange={(v) => setSettings({ untimed: !v })}
                       disabled={!room.isHost}
-                      aria-label="No time limit"
+                      aria-label="Timed round"
                     />
                   }
                 />
 
+                {/* Round length — same SettingRow shell as Timed round/Voting/Redaction
+                    (label block left, pills right, vertically centered). Untimed
+                    disables these. Pills stay flush-right; wrap on narrow widths. */}
                 <SettingRow
-                  icon="✂️"
-                  title="Redaction limit"
-                  hint={limit === 0 ? 'Unlimited — no cap this round' : `${limit} redaction${limit === 1 ? '' : 's'} max this round`}
-                  control={
-                    <div className="flex items-center gap-1">
-                      <button className="btn-secondary w-8 h-8 !px-0 !py-0 text-lg" onClick={() => setLimit(limit - 1)} disabled={!room.isHost || limit <= 0}>−</button>
-                      <span className="w-8 text-center tabular-nums font-display font-bold text-lg" title={limit === 0 ? 'Unlimited' : undefined}>{limit === 0 ? '∞' : limit}</span>
-                      <button className="btn-secondary w-8 h-8 !px-0 !py-0 text-lg" onClick={() => setLimit(limit + 1)} disabled={!room.isHost}>+</button>
-                    </div>
+                  icon="⏱️"
+                  title="Round length"
+                  className={lengthDisabled ? 'opacity-55' : undefined}
+                  hint={
+                    lengthDisabled
+                      ? 'Doesn’t apply while Timed round is off.'
+                      : settings.timerMode === 'auto'
+                        ? autoEstimate != null
+                          ? `Scales with text — about ${formatSecs(autoEstimate)} for this source.`
+                          : 'Scales with how much text is in the image.'
+                        : settings.timerMode === 'custom'
+                          ? `Host-picked length: ${formatSecs(settings.customSeconds)}.`
+                          : `${timerModeLabel(settings.timerMode)} — ${formatSecs(resolvedPreview)} per round.`
                   }
-                />
-
-                {/* Round length */}
-                <div className={`flex items-center gap-3 ${ROUND_SETTING_CARD} ${lengthDisabled ? 'opacity-55' : ''}`}>
-                  <span className="text-xl shrink-0" aria-hidden>⏱️</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-base font-bold">Round length</div>
-                    <div className="text-sm text-ink3 truncate mb-2">
-                      {lengthDisabled
-                        ? 'Doesn’t apply while there’s no deadline.'
-                        : settings.timerMode === 'auto'
-                          ? autoEstimate != null
-                            ? `Scales with text — about ${formatSecs(autoEstimate)} for this source.`
-                            : 'Scales with how much text is in the image.'
-                          : settings.timerMode === 'custom'
-                            ? `Host-picked deadline: ${formatSecs(settings.customSeconds)}.`
-                            : `${timerModeLabel(settings.timerMode)} — ${formatSecs(resolvedPreview)} per round.`}
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Round length">
+                  control={
+                    <div className="flex flex-wrap gap-1.5 justify-end" role="group" aria-label="Round length">
                       {LENGTH_OPTIONS.map(({ mode, label, sub }) => (
                         <button
                           key={mode}
@@ -254,8 +283,9 @@ export function Lobby({ room }: { room: RoomApi }) {
                         </button>
                       ))}
                     </div>
-
-                    {settings.timerMode === 'custom' && !lengthDisabled && (
+                  }
+                  footer={
+                    settings.timerMode === 'custom' && !lengthDisabled ? (
                       <div className="mt-2">
                         <CustomTimePicker
                           seconds={settings.customSeconds}
@@ -263,9 +293,57 @@ export function Lobby({ room }: { room: RoomApi }) {
                           disabled={!room.isHost}
                         />
                       </div>
-                    )}
-                  </div>
-                </div>
+                    ) : undefined
+                  }
+                />
+
+                <SettingRow
+                  icon="🗳️"
+                  title="Voting"
+                  hint={state.votingEnabled ? 'On — a ballot follows every round' : 'Off — just for laughs'}
+                  control={<Toggle checked={state.votingEnabled} onChange={room.setVoting} disabled={!room.isHost} aria-label="Enable voting" />}
+                />
+
+                <SettingRow
+                  icon="✂️"
+                  title="Redaction limit"
+                  hint={
+                    capped
+                      ? `Cap at ${capValue} redaction${capValue === 1 ? '' : 's'}`
+                      : 'Off — unlimited redactions'
+                  }
+                  control={
+                    <Toggle
+                      checked={capped}
+                      onChange={setRedactionCapped}
+                      disabled={!room.isHost}
+                      aria-label="Cap redactions"
+                    />
+                  }
+                  footer={
+                    capped ? (
+                      <div className="mt-2 flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={REDACTION_CAP_MIN}
+                          max={REDACTION_CAP_MAX}
+                          step={1}
+                          value={capValue}
+                          disabled={!room.isHost}
+                          onChange={(e) => setCapValue(Number(e.target.value))}
+                          className="flex-1 min-w-0 h-2 accent-grief cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          aria-label="Maximum redactions"
+                          aria-valuemin={REDACTION_CAP_MIN}
+                          aria-valuemax={REDACTION_CAP_MAX}
+                          aria-valuenow={capValue}
+                        />
+                        <span className="w-9 shrink-0 text-right tabular-nums font-display font-bold text-lg leading-none">
+                          {capValue}
+                        </span>
+                      </div>
+                    ) : undefined
+                  }
+                />
               </div>
             )}
           </div>
@@ -410,22 +488,39 @@ function formatSecs(total: number): string {
   return `${m}m ${String(s).padStart(2, '0')}s`;
 }
 
-/** Shared shell so Voting / Deadline / Redaction match Round length’s taller
- *  card (title + hint + mode pills). Content stays vertically centered. */
+/** Shared shell so Voting / Timed round / Round length / Redaction share the same
+ *  inset card rhythm. Label block + controls stay vertically centered. */
 const ROUND_SETTING_CARD =
   'px-3.5 py-2.5 rounded-[3px] card-inset min-h-[7.5rem]';
 
-function SettingRow({ icon, title, hint, control }: { icon?: string; title: string; hint: string; control: React.ReactNode }) {
+function SettingRow({
+  icon,
+  title,
+  hint,
+  control,
+  footer,
+  className,
+}: {
+  icon?: string;
+  title: string;
+  hint: string;
+  control: React.ReactNode;
+  footer?: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={`flex items-center justify-between gap-3 ${ROUND_SETTING_CARD}`}>
-      <div className="flex items-center gap-3 min-w-0">
-        {icon && <span className="text-xl shrink-0" aria-hidden>{icon}</span>}
-        <div className="min-w-0">
-          <div className="text-base font-bold">{title}</div>
-          <div className="text-sm text-ink3">{hint}</div>
+    <div className={`${ROUND_SETTING_CARD} flex flex-col justify-center ${className ?? ''}`}>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex items-center gap-3 min-w-0">
+          {icon && <span className="text-xl shrink-0" aria-hidden>{icon}</span>}
+          <div className="min-w-0">
+            <div className="text-base font-bold">{title}</div>
+            <div className="text-sm text-ink3">{hint}</div>
+          </div>
         </div>
+        <div className="shrink-0 ml-auto">{control}</div>
       </div>
-      <div className="shrink-0">{control}</div>
+      {footer}
     </div>
   );
 }
