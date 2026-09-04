@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { RoomApi } from '../state/useRoom';
 
 export function Reveal({ room }: { room: RoomApi }) {
@@ -12,6 +12,13 @@ export function Reveal({ room }: { room: RoomApi }) {
   const current = subs[idx];
   const owner = current ? state.players.find((p) => p.id === current.playerId) : null;
   const isLast = idx >= subs.length - 1;
+
+  // Keep the source image warm so "Hold to see original" never waits on a load
+  // (and never flashes the paper background while a swapped src decodes).
+  useEffect(() => {
+    const preload = new Image();
+    preload.src = source.imageUrl;
+  }, [source.imageUrl]);
 
   if (subs.length === 0) {
     return (
@@ -41,11 +48,21 @@ export function Reveal({ room }: { room: RoomApi }) {
 
       <div className="card flex-1 min-h-0 p-2.5 sm:p-3 flex flex-col gap-2">
         <div className="relative flex-1 min-h-0 mx-auto w-full flex items-center justify-center rounded-[2px] overflow-hidden bg-paper2 border-2 border-ink">
+          {/* Edited drives layout; original is stacked on top and only toggles opacity.
+              Never swap src / remount — that flashed bg-paper2 while the other image loaded. */}
           <img
-            key={`${current.id}-${showOriginal}`}
-            src={showOriginal ? source.imageUrl : current.editedImageUrl}
-            alt={showOriginal ? 'Original source' : 'Redacted submission'}
+            key={current.id}
+            src={current.editedImageUrl}
+            alt="Redacted submission"
             className="block max-h-full max-w-full w-auto h-auto object-contain animate-pop"
+          />
+          <img
+            src={source.imageUrl}
+            alt="Original source"
+            aria-hidden={!showOriginal}
+            className={`absolute inset-0 m-auto max-h-full max-w-full w-auto h-auto object-contain pointer-events-none ${
+              showOriginal ? 'opacity-100' : 'opacity-0'
+            }`}
           />
           {showOriginal && <span className="absolute top-2 left-2 pill">uncensored proof</span>}
         </div>
