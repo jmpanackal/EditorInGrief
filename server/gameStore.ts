@@ -443,12 +443,10 @@ export class GameStore {
   startRound(code: string, playerId: string, sourceId?: string): void {
     const room = this.requireHost(code, playerId);
     this.normalizeRoomSettings(room);
-    // Normally starts from the lobby (host staged a fresh upload / bank pick).
-    // Also allowed straight from the scoreboard — the "Next round" shortcut —
-    // which reuses the same pickSource fallback (voted/random) without making
-    // the host revisit the full lobby screen between every round.
-    if (room.state.phase !== 'lobby' && room.state.phase !== 'scoreboard') {
-      throw new GameError('You can only start a round from the lobby or the scoreboard.');
+    // Host starts from the lobby after staging a fresh upload / bank pick.
+    // Scoreboard only offers "Play again" → returnToLobby (never skip the lobby).
+    if (room.state.phase !== 'lobby') {
+      throw new GameError('You can only start a round from the lobby.');
     }
     const source = this.pickSource(room, sourceId);
     if (!source) throw new GameError('No source images available. Seed bank is empty.');

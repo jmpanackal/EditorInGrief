@@ -71,15 +71,16 @@ export function Scoreboard({ room }: { room: RoomApi }) {
 
         {room.isHost && (
           <div className="flex flex-wrap gap-2 mt-6 justify-end shrink-0">
-            <button className="btn-primary" onClick={() => room.startRound()}>
-              Next round →
-            </button>
-            <button className="btn-secondary" onClick={room.returnToLobby}>
-              Back to lobby
+            <button className="btn-primary" onClick={room.returnToLobby}>
+              Play again →
             </button>
           </div>
         )}
-        {!room.isHost && <p className="text-ink3 text-sm mt-6 italic shrink-0">Awaiting the Host’s next move…</p>}
+        {!room.isHost && (
+          <p className="text-ink3 text-sm mt-6 italic shrink-0">
+            Waiting for the host to play again…
+          </p>
+        )}
       </div>
     </div>
   );
