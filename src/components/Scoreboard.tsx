@@ -80,27 +80,31 @@ export function Scoreboard({ room }: { room: RoomApi }) {
 
       {/* The Verdict — sole main content: this round’s gallery + download + CTAs. */}
       <div className="order-1 md:order-2 card p-5 flex flex-col md:min-h-0 md:overflow-hidden">
-        <div className="flex items-start justify-between gap-3 mb-3 flex-wrap shrink-0">
-          <div className="text-center flex-1 min-w-[12rem]">
+        {/* 3-col header: equal side slots so the title stays optically centered. */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2 mb-2 shrink-0">
+          <div aria-hidden className="min-w-0" />
+          <div className="text-center px-2">
             <div className="kicker text-[11px] flex items-center justify-center gap-2">
-              <span className="hr-thin flex-1" /> The Verdict <span className="hr-thin flex-1" />
+              <span className="hr-thin w-8" /> The Verdict <span className="hr-thin w-8" />
             </div>
             <div className="font-display font-black text-2xl mt-1">
               Story No. {state.roundNumber} — Final
             </div>
+            {winnerNick && (
+              <p className="mt-1 font-display font-black text-grief text-sm">
+                Crowd favorite: {winnerNick}
+              </p>
+            )}
           </div>
-          {latestRecap && <RoundDownload recap={latestRecap} code={state.code} />}
+          <div className="justify-self-end min-w-0">
+            {latestRecap && <RoundDownload recap={latestRecap} code={state.code} />}
+          </div>
         </div>
 
-        {/* One-line round toast + optional silly award */}
-        <div className="shrink-0 mb-4 rounded-[3px] border border-ink/20 bg-paper2/80 px-3 py-2 text-center">
-          <p className="text-sm text-ink2 font-slab">{toastParts.join(' · ')}</p>
-          {winnerNick && (
-            <p className="mt-1 font-display font-black text-grief text-sm sm:text-base">
-              Crowd favorite: {winnerNick}
-            </p>
-          )}
-        </div>
+        {/* Quiet meta line — no heavy bar */}
+        <p className="shrink-0 mb-4 text-center text-xs sm:text-sm text-ink3 font-slab tracking-wide">
+          {toastParts.join(' · ')}
+        </p>
 
         {!round || !state.currentSource ? (
           <div className="text-ink3 py-6 text-center italic">No copy filed this round.</div>
@@ -181,12 +185,9 @@ function VerdictGallery({
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-4">
-      {/* Single submission: wide before/after row fills Verdict width. */}
-      {singleEdit && (
-        <div
-          className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 items-start"
-          data-verdict="before-after"
-        >
+      {/* Original always alone, centered, on its own row. */}
+      <div className="w-full flex justify-center shrink-0" data-verdict="original">
+        <div className="w-full max-w-2xl">
           <VerdictClip
             src={originalSrc}
             alt="Original source image"
@@ -194,50 +195,41 @@ function VerdictGallery({
             dashed
             featured
           />
-          <VerdictClip
-            key={playerItems[0].id}
-            {...playerItems[0]}
-            submissionId={playerItems[0].id}
-            reactionMap={reactions[playerItems[0].id]}
-            meId={meId}
-            onReact={onReact}
-          />
+        </div>
+      </div>
+
+      {/* Edits below: one centered, or 2-col grid. */}
+      {singleEdit && (
+        <div className="w-full flex justify-center" data-verdict="edits">
+          <div className="w-full max-w-xl">
+            <VerdictClip
+              key={playerItems[0].id}
+              {...playerItems[0]}
+              submissionId={playerItems[0].id}
+              reactionMap={reactions[playerItems[0].id]}
+              meId={meId}
+              onReact={onReact}
+            />
+          </div>
         </div>
       )}
 
-      {/* Multi: Original alone on top, edits in 2-col below. */}
-      {!singleEdit && (
-        <>
-          <div className="w-full flex justify-center shrink-0" data-verdict="original">
-            <div className="w-full max-w-2xl">
-              <VerdictClip
-                src={originalSrc}
-                alt="Original source image"
-                label="Original"
-                dashed
-                featured
-              />
-            </div>
-          </div>
-
-          {playerItems.length >= 2 && (
-            <div
-              className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 content-start items-start [&>*:last-child:nth-child(odd)]:sm:col-span-2 [&>*:last-child:nth-child(odd)]:sm:max-w-[calc(50%-0.375rem)] [&>*:last-child:nth-child(odd)]:sm:justify-self-center"
-              data-verdict="edits"
-            >
-              {playerItems.map((item) => (
-                <VerdictClip
-                  key={item.id}
-                  {...item}
-                  submissionId={item.id}
-                  reactionMap={reactions[item.id]}
-                  meId={meId}
-                  onReact={onReact}
-                />
-              ))}
-            </div>
-          )}
-        </>
+      {playerItems.length >= 2 && (
+        <div
+          className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 content-start items-start [&>*:last-child:nth-child(odd)]:sm:col-span-2 [&>*:last-child:nth-child(odd)]:sm:max-w-[calc(50%-0.375rem)] [&>*:last-child:nth-child(odd)]:sm:justify-self-center"
+          data-verdict="edits"
+        >
+          {playerItems.map((item) => (
+            <VerdictClip
+              key={item.id}
+              {...item}
+              submissionId={item.id}
+              reactionMap={reactions[item.id]}
+              meId={meId}
+              onReact={onReact}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
@@ -302,8 +294,8 @@ function VerdictClip({
         <span
           className={`truncate min-w-0 shrink ${
             featured
-              ? 'font-display font-black tracking-wide uppercase text-sm'
-              : 'font-display font-bold text-base sm:text-lg'
+              ? 'font-display font-black tracking-wide uppercase text-base sm:text-lg'
+              : 'font-display font-black text-lg sm:text-xl'
           }`}
         >
           {label}
