@@ -7,7 +7,9 @@ import { HowToPlayCarousel } from './HowToPlayCarousel';
 export function JoinScreen({ room }: { room: RoomApi }) {
   const [nickname, setNickname] = useState('');
   const [code, setCode] = useState('');
-  const [mode, setMode] = useState<'join' | 'create'>('join');
+  // Default to Enter Lobby so the primary host path is highlighted — Join is
+  // one tap away when you already have a code.
+  const [mode, setMode] = useState<'join' | 'create'>('create');
   // True only when we arrived via a shared ?code= / ?room= link (not when someone
   // typed a code in manually) — drives the distinct "you're invited" framing
   // so it's obvious at a glance which flow you're in.
@@ -33,7 +35,7 @@ export function JoinScreen({ room }: { room: RoomApi }) {
     syncRoomUrl(null);
   };
 
-  /** Same URL cleanup, but land on Start Game for hosts who give up on the invite. */
+  /** Same URL cleanup, but land on Enter Lobby for hosts who give up on the invite. */
   const startFresh = () => {
     setInvited(false);
     setMode('create');
@@ -123,7 +125,7 @@ export function JoinScreen({ room }: { room: RoomApi }) {
                     />
                   </div>
                   <button type="submit" className="btn-primary py-3.5 text-xl" disabled={!canJoin || connecting}>
-                    {connecting ? 'Connecting…' : 'Join Game →'}
+                    {connecting ? 'Connecting…' : 'Join Lobby →'}
                   </button>
                   {room.error && (
                     <p className="text-center text-grief font-slab font-semibold text-sm leading-snug" role="alert">
@@ -138,14 +140,14 @@ export function JoinScreen({ room }: { room: RoomApi }) {
                       your invite" — that phrasing reads as a dead end if
                       the invite WAS yours but the room disappeared. */}
                   <button type="button" className="btn-ghost text-sm self-center" onClick={startFresh}>
-                    Room gone, or wrong code? Start your own game instead
+                    Room gone, or wrong code? Enter a new lobby instead
                   </button>
                 </form>
               </>
             ) : (
               <>
                 <p className="text-center text-ink2 text-lg leading-snug">
-                  Redact a screenshot to make it hilarious.<br />
+                  Edit the post by redacting text<br />
                   <span className="italic">Redact, reveal, repeat — extra, extra!</span>
                 </p>
 
@@ -173,10 +175,11 @@ export function JoinScreen({ room }: { room: RoomApi }) {
                     />
                   </div>
 
-                  {/* Segmented join/create */}
+                  {/* Segmented join/create — "Enter Lobby" (not "Start Game") so
+                      hosts don't think play has begun before the waiting room. */}
                   <div className="segmented w-full text-lg">
+                    <button type="button" className="segmented-item flex-1 !py-2.5" data-active={mode === 'create'} onClick={() => setMode('create')}>Enter Lobby</button>
                     <button type="button" className="segmented-item flex-1 !py-2.5" data-active={mode === 'join'} onClick={() => setMode('join')}>Join a Room</button>
-                    <button type="button" className="segmented-item flex-1 !py-2.5" data-active={mode === 'create'} onClick={() => setMode('create')}>Start Game</button>
                   </div>
 
                   {mode === 'join' ? (
@@ -192,12 +195,12 @@ export function JoinScreen({ room }: { room: RoomApi }) {
                         />
                       </div>
                       <button type="submit" className="btn-primary py-3.5 text-xl" disabled={!canJoin || connecting}>
-                        {connecting ? 'Connecting…' : 'Join Game →'}
+                        {connecting ? 'Connecting…' : 'Join Lobby →'}
                       </button>
                     </>
                   ) : (
                     <button type="submit" className="btn-primary py-3.5 text-xl" disabled={!canCreate || connecting}>
-                      {connecting ? 'Connecting…' : 'Start Game →'}
+                      {connecting ? 'Connecting…' : 'Enter Lobby →'}
                     </button>
                   )}
 

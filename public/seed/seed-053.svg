@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1048" viewBox="0 0 720 1048" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1048" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">AO</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Amelia Omar</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">HR Business Partner | Brighton Energy Holdings</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">Someone had the answer in a chat from March</tspan><tspan x="36" dy="36">that nobody could find.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The part dashboards miss is the human</tspan><tspan x="36" dy="36">friction. We kept optimizing a workflow that</tspan><tspan x="36" dy="36">should have been deleted.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">My job includes removing friction other people</tspan><tspan x="36" dy="36">cannot see.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Speed without clarity just creates expensive</tspan><tspan x="36" dy="36">rework.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The blocker was not technical. It was three</tspan><tspan x="36" dy="36">teams waiting on each other politely.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Protecting focus time is part of delivering,</tspan><tspan x="36" dy="36">not a personal luxury.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I rewrote the agenda as questions instead of</tspan><tspan x="36" dy="36">status theater.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Clarify the definition of done before you</tspan><tspan x="36" dy="36">celebrate starting.</tspan></text>
+  <line x1="36" y1="992" x2="684" y2="992" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1026" fill="#00000099" font-size="18">♥ 569   💬 29</text>
+  <text x="684" y="1026" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

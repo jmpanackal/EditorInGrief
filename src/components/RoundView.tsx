@@ -72,7 +72,7 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
       ? (untimed
           ? 'Ready — waiting for others…'
           : 'Ready — waiting for others or the deadline…')
-      : 'Redact the story to make it funnier.';
+      : 'Edit the post by redacting text';
 
   return (
     <div className="flex flex-col flex-1 min-h-0 h-full gap-1.5 sm:gap-2 animate-fade-up">

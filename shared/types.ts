@@ -191,6 +191,8 @@ export interface SeedSource {
   imageUrl: string;
   wordCount: number;
   label: string;
+  /** Optional length band from the seed generator (short / mid / long). */
+  bucket?: 'short' | 'mid' | 'long';
 }
 
 /** Messages sent FROM a client TO the server. */

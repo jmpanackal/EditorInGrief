@@ -13,13 +13,13 @@ export const HOW_TO_PLAY_STEPS: HowToPlayStep[] = [
     n: '',
     icon: '📰',
     title: 'The idea',
-    body: 'Redact a screenshot to make it funnier. You can only cover things up, never add — never a blank page.',
+    body: 'Edit the post by redacting text',
   },
   {
     n: '1',
     icon: '🛎️',
     title: 'Lobby',
-    body: 'The host sets the rules. Anyone can upload a screenshot to redact.',
+    body: 'Waiting room first — pick/vote on a story. Host hits Start Editing when ready.',
   },
   {
     n: '2',

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1012" viewBox="0 0 720 1012" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1012" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">DK</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Dina Kaplan</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Girlboss | Senior Consultant at Clearwater Group</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">Today I learned my "quick sync" had become</tspan><tspan x="36" dy="36">twelve people's calendar tax.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Someone wrote, "Can we move the deadline?"</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I answered with the messy truth. I stopped</tspan><tspan x="36" dy="36">mid-sentence when I realized I was restating</tspan><tspan x="36" dy="36">what they already knew.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Status updates belong in writing. Meetings are</tspan><tspan x="36" dy="36">for decisions.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Ownership without authority is just anxiety</tspan><tspan x="36" dy="36">with a title.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I rewrote the agenda as questions instead of</tspan><tspan x="36" dy="36">status theater.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Protecting focus time is part of delivering,</tspan><tspan x="36" dy="36">not a personal luxury.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Two people on the team had been carrying</tspan><tspan x="36" dy="36">context that never made it into the doc.</tspan></text>
+  <line x1="36" y1="956" x2="684" y2="956" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="990" fill="#00000099" font-size="18">♥ 566   💬 26</text>
+  <text x="684" y="990" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

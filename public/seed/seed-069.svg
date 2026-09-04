@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1084" viewBox="0 0 720 1084" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1084" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">CZ</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">Cameron Zhou</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@kim.kapoor</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26"><tspan x="36" dy="0">If I could tell my earlier self one career</tspan><tspan x="36" dy="36">thing, it would be this.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">A small public portfolio beats a perfect</tspan><tspan x="36" dy="36">private draft.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Keep a weekly brag doc. Future you will need</tspan><tspan x="36" dy="36">receipts.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I stopped waiting to be discovered and started</tspan><tspan x="36" dy="36">proposing scoped experiments.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Growth requires recovery time, not just</tspan><tspan x="36" dy="36">ambition.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I ask for feedback while the project is still</tspan><tspan x="36" dy="36">warm, not at review season.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Choose managers who develop people, not just</tspan><tspan x="36" dy="36">extract output.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Keep a weekly brag doc. Future you will need</tspan><tspan x="36" dy="36">receipts.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Consistency beats intensity most years.</tspan></text>
+  <line x1="36" y1="1028" x2="684" y2="1028" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1062" fill="#536471" font-size="18">♥ 544   ↺ 64   💬 4</text>
+  <text x="684" y="1062" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>

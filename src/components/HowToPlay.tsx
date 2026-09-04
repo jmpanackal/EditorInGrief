@@ -64,10 +64,10 @@ export function HowToPlay() {
             <div>
               <div className="kicker text-[11px] mb-2">Editor tools</div>
               <ul className="text-sm text-ink2 flex flex-col gap-1.5">
-                <li><b>▭ Box</b> — drag a filled rectangle. Fastest for whole lines.</li>
+                <li><b>▭ Box</b> — drag a rectangle, or tap to place one. Fastest for whole lines.</li>
                 <li><b>✎ Marker</b> — freehand painting with an adjustable thickness.</li>
-                <li><b>🔤 Tap text</b> (under "⋯ More") — auto-detected words; tap to hide/reveal one, drag across a range to hide several.</li>
-                <li><b>⌫ Eraser</b> (under "⋯ More") — tap a redaction to lift just that one.</li>
+                <li><b>abc Text</b> — auto-detected words; tap to hide/reveal one, drag across a range to hide several.</li>
+                <li><b>👁 Uncover</b> — click a redaction to bring that part back (hover peeks it on desktop).</li>
                 <li>Hold <b>Shift</b> (or the 📐 toggle) for straight lines / perfect squares.</li>
                 <li>Scroll or pinch to zoom; Space + drag (or middle-drag) to pan.</li>
               </ul>

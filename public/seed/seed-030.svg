@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="332" viewBox="0 0 720 332" font-family="Roboto, Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="332" fill="#0f0f0f"/>
+  <circle cx="48" cy="40" r="20" fill="#ff0000"/>
+  <text x="48" y="40" fill="#ffffff" font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="central">G</text>
+  <text x="82" y="36" fill="#f1f1f1" font-size="15" font-weight="700">@Giulia42</text>
+  <text x="167.8" y="36" fill="#aaaaaa" font-size="13">2 hours ago</text>
+  <text x="82" y="80" fill="#f1f1f1" font-size="22"><tspan x="82" dy="0">me explaining it to my coworker tomorrow using only</tspan><tspan x="82" dy="30">2:03 onward</tspan><tspan x="82" dy="30"> </tspan><tspan x="82" dy="30">no weird sponsor detour thank you</tspan><tspan x="82" dy="30"> </tspan><tspan x="82" dy="30">this aged better than the older tutorial I had</tspan><tspan x="82" dy="30">bookmarked</tspan></text>
+  <text x="82" y="296" fill="#aaaaaa" font-size="14">👍 160    👎     Reply</text>
+</svg>

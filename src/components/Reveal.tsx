@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { VERDICT_REACTION_EMOJIS } from '../../shared/types';
 import type { RoomApi } from '../state/useRoom';
 
@@ -7,6 +7,7 @@ export function Reveal({ room }: { room: RoomApi }) {
   const round = state.currentRound!;
   const source = state.currentSource!;
   const [showOriginal, setShowOriginal] = useState(false);
+  const resultsBtnRef = useRef<HTMLButtonElement | null>(null);
 
   const subs = round.submissions;
   const idx = Math.min(round.revealIndex, Math.max(0, subs.length - 1));
@@ -21,6 +22,36 @@ export function Reveal({ room }: { room: RoomApi }) {
     const preload = new Image();
     preload.src = source.imageUrl;
   }, [source.imageUrl]);
+
+  // Prefer See Results / Open ballot so native Enter confirms when it appears.
+  useEffect(() => {
+    if (!room.isHost || !isLast || subs.length === 0) return;
+    requestAnimationFrame(() => resultsBtnRef.current?.focus());
+  }, [room.isHost, isLast, subs.length]);
+
+  // Enter opens results/ballot when the host isn't typing in a field.
+  // Skip when a button already has focus — native Enter activates it.
+  useEffect(() => {
+    if (!room.isHost || !isLast || subs.length === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const t = e.target;
+      if (
+        t instanceof HTMLInputElement ||
+        t instanceof HTMLTextAreaElement ||
+        t instanceof HTMLSelectElement ||
+        t instanceof HTMLButtonElement ||
+        (t instanceof HTMLElement && (t.isContentEditable || t.closest('button')))
+      ) {
+        return;
+      }
+      e.preventDefault();
+      if (round.votingEnabled) room.beginVoting();
+      else room.showScoreboard();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [room, isLast, round.votingEnabled, subs.length]);
 
   if (subs.length === 0) {
     return (
@@ -147,7 +178,11 @@ export function Reveal({ room }: { room: RoomApi }) {
           <div className={`flex items-center gap-2 shrink-0 ${subs.length > 1 ? 'sm:w-[min(100%,22rem)]' : 'w-full'}`}>
             <button className="btn-secondary" disabled={idx === 0} onClick={() => room.advanceReveal(-1)}>← Previous</button>
             {isLast ? (
-              <button className="btn-primary flex-1" onClick={round.votingEnabled ? room.beginVoting : room.showScoreboard}>
+              <button
+                ref={resultsBtnRef}
+                className="btn-primary flex-1"
+                onClick={round.votingEnabled ? room.beginVoting : room.showScoreboard}
+              >
                 {round.votingEnabled ? 'Open ballot →' : 'See Results →'}
               </button>
             ) : (

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1012" viewBox="0 0 720 1012" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1012" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1877f2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">FB</text>
+  <text x="108" y="42" fill="#050505" font-size="24" font-weight="700">Freya Bianchi</text>
+  <text x="108" y="72" fill="#65676b" font-size="18">1 d · 🌎 Public</text>
+  <text x="36" y="146" fill="#050505" font-size="26"><tspan x="36" dy="0">I sent photos from ordinary life, not only</tspan><tspan x="36" dy="36">milestones.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I am practicing saying no to plans without</tspan><tspan x="36" dy="36">writing an essay.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We divided hosting tasks so one person was not</tspan><tspan x="36" dy="36">the unpaid event staff.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Ordinary updates keep relationships warm.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">One step at a time.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Boundaries can be kind when they are clear.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I asked my dad about a job he had before I was</tspan><tspan x="36" dy="36">born. He lit up.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Presence over presents, and also sometimes</tspan><tspan x="36" dy="36">presents help.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We left politics at the door for one meal and</tspan><tspan x="36" dy="36">talked about gardens.</tspan></text>
+  <line x1="36" y1="956" x2="684" y2="956" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="990" fill="#65676b" font-size="18">Like · Comment · Share</text>
+  <text x="684" y="990" fill="#1877f2" font-size="16" font-weight="600" text-anchor="end">FACEBOOK</text>
+</svg>

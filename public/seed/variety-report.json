@@ -1,0 +1,66 @@
+{
+  "generatedAt": "2026-09-04T19:22:41.509Z",
+  "mode": "wave1",
+  "total": 150,
+  "platforms": {
+    "linkedin": 60,
+    "twitter": 39,
+    "facebook": 24,
+    "youtube": 15,
+    "news": 12
+  },
+  "buckets": {
+    "short": 50,
+    "mid": 50,
+    "long": 50
+  },
+  "topicCount": 25,
+  "voiceCount": 12,
+  "structureCount": 19,
+  "structureHistogram": {
+    "short_update": 28,
+    "story_lesson": 25,
+    "opinion_support": 21,
+    "before_after": 9,
+    "two_voices": 1,
+    "quote_reply": 6,
+    "short_list": 6,
+    "open_letter": 5,
+    "yt_timestamp": 2,
+    "yt_disagree": 3,
+    "yt_list_tips": 2,
+    "news_lede": 5,
+    "yt_thanks": 2,
+    "timeline_week": 6,
+    "email_forward": 7,
+    "metrics_then_human": 12,
+    "howto_steps": 4,
+    "yt_story": 3,
+    "yt_question": 3
+  },
+  "structureSpread": 27,
+  "uniqueFirst8Ratio": 0.98,
+  "maxFirst8Repeat": 3,
+  "maxFirstNameCount": 2,
+  "tryhardCloserShare": 0,
+  "bannedHits": 0,
+  "nameLength": {
+    "min": 6,
+    "max": 18,
+    "shortCount": 26,
+    "longCount": 0
+  },
+  "gates": {
+    "topicsMin": true,
+    "voicesMin": true,
+    "structuresMin": true,
+    "uniqueFirst8": true,
+    "maxOpenerFreq": true,
+    "tryhardCloserShare": true,
+    "bannedNames": true,
+    "nameLengthSpread": false,
+    "maxFirstNameFreq": true,
+    "structureEvenness": false
+  },
+  "passed": false
+}

@@ -58,6 +58,49 @@
            border-2 border-ink shadow-press hover:bg-griefdark active:translate-x-[2px] active:translate-y-[3px] active:shadow-none transition
            disabled:opacity-40 disabled:pointer-events-none;
   }
+
+  /* Dual-dash SVG perimeter chase on Start Editing (Lobby .outline-chase).
+     pathLength=1 + strokeDasharray dual dashes; offset -1 = one full lap. */
+  :root {
+    --outline-chase-duration: 10s;
+    /* Landing HowToPlayCarousel auto-advance — keep in sync with AUTO_ADVANCE_MS. */
+    --how-to-play-advance: 5s;
+  }
+  .outline-chase {
+    animation: outline-chase var(--outline-chase-duration) linear infinite;
+  }
+  @keyframes outline-chase {
+    to {
+      stroke-dashoffset: -1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .outline-chase {
+      animation: none;
+    }
+  }
+
+  /* Closing countdown ring around the active carousel pagination bubble.
+     Starts full and depletes (stroke-dashoffset → circumference) before the
+     next auto-advance. Restarted by remounting the SVG when the slide changes. */
+  .how-to-play-ring {
+    transform: rotate(-90deg);
+    transform-origin: center;
+  }
+  .how-to-play-ring__progress {
+    animation: how-to-play-ring-deplete var(--how-to-play-advance) linear forwards;
+  }
+  @keyframes how-to-play-ring-deplete {
+    to {
+      stroke-dashoffset: 1; /* pathLength=1 on the progress circle */
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .how-to-play-ring__progress {
+      animation: none;
+    }
+  }
+
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-[3px] bg-papercard text-ink font-slab font-bold uppercase tracking-wide
            border-2 border-ink shadow-press hover:bg-paper2 active:translate-x-[2px] active:translate-y-[3px] active:shadow-none transition

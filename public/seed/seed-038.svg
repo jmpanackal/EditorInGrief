@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="616" viewBox="0 0 720 616" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="616" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1877f2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">PS</text>
+  <text x="108" y="42" fill="#050505" font-size="24" font-weight="700">Parker Sullivan</text>
+  <text x="108" y="72" fill="#65676b" font-size="18">Just now · 🌎 Public</text>
+  <text x="36" y="146" fill="#050505" font-size="26"><tspan x="36" dy="0">The quiet helpers deserve a public nod</tspan><tspan x="36" dy="36">sometimes.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Family handled dinner on the night I had</tspan><tspan x="36" dy="36">nothing left.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">A student said thank you for the extra</tspan><tspan x="36" dy="36">explanation. I needed that.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Notice the invisible work on purpose.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Onward.</tspan></text>
+  <line x1="36" y1="560" x2="684" y2="560" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="594" fill="#65676b" font-size="18">Like · Comment · Share</text>
+  <text x="684" y="594" fill="#1877f2" font-size="16" font-weight="600" text-anchor="end">FACEBOOK</text>
+</svg>

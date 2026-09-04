@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1084" viewBox="0 0 720 1084" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1084" fill="#fffdf7"/>
+  <rect x="0" y="0" width="720" height="96" fill="#111111"/>
+  <circle cx="64" cy="56" r="28" fill="#111111"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">CR</text>
+  <text x="108" y="42" fill="#ffffff" font-size="24" font-weight="700">County Record</text>
+  <text x="108" y="72" fill="#ffd7d7" font-size="18">LOCAL</text>
+  <text x="36" y="146" fill="#1a1a1a" font-size="26"><tspan x="36" dy="0">We closed a project that took nine months.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">In Seoul, we kept optimizing a workflow that</tspan><tspan x="36" dy="36">should have been deleted.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Status updates belong in writing. Meetings are</tspan><tspan x="36" dy="36">for decisions.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Noticing this more lately.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">A good retro names the system, not the</tspan><tspan x="36" dy="36">scapegoat.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The client was fine. The process was not.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">If you lead, your calendar is a culture</tspan><tspan x="36" dy="36">document.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The client was fine. The process was not.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I am trying to listen longer before I</tspan><tspan x="36" dy="36">problem-solve.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Someone had the answer in a chat from March</tspan><tspan x="36" dy="36">that nobody could find.</tspan></text>
+  <line x1="36" y1="1028" x2="684" y2="1028" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1062" fill="#b91c1c" font-size="18">♥ 517   💬 37</text>
+  <text x="684" y="1062" fill="#b91c1c" font-size="16" font-weight="600" text-anchor="end">NEWS</text>
+</svg>

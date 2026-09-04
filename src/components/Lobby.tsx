@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CUSTOM_TIMER_MAX,
   CUSTOM_TIMER_MIN,
@@ -49,10 +49,12 @@ export function Lobby({ room }: { room: RoomApi }) {
   const connectedCount = state.players.filter((p) => p.connected).length;
   const [showSoloConfirm, setShowSoloConfirm] = useState(false);
   const [tab, setTab] = useState<LobbyTab>('source');
+  const soloStartBtnRef = useRef<HTMLButtonElement | null>(null);
   // Remember last capped value so toggling Off→On restores a sensible number.
   const [lastCap, setLastCap] = useState(() =>
     settings.maxRedactions != null ? clampRedactionCap(settings.maxRedactions) : DEFAULT_REDACTION_CAP,
   );
+  const startBtnRef = useRef<HTMLButtonElement | null>(null);
 
   const capped = settings.maxRedactions != null;
   const capValue = capped ? clampRedactionCap(settings.maxRedactions!) : lastCap;
@@ -103,6 +105,7 @@ export function Lobby({ room }: { room: RoomApi }) {
   const canStart = connectedCount >= 1 && !needsTiebreak;
 
   const nextSource = uniqueWinner ?? selectedSource;
+  const activeStoryId = uniqueWinner?.id ?? selectedSource?.id ?? null;
   const wordCount = nextSource?.wordCount ?? 0;
   const autoEstimate = wordCount > 0 ? computeTimerSeconds(wordCount) : null;
   const resolvedPreview = resolveRoundTimerSeconds(settings, wordCount);
@@ -113,6 +116,51 @@ export function Lobby({ room }: { room: RoomApi }) {
     room.startRound();
   };
 
+  /** After host picks a story, move focus to Start Editing (happy path). */
+  const focusStartEditing = () => {
+    requestAnimationFrame(() => startBtnRef.current?.focus());
+  };
+
+  // Prefer Start anyway so native Enter confirms when the solo dialog is open.
+  useEffect(() => {
+    if (!showSoloConfirm) return;
+    requestAnimationFrame(() => soloStartBtnRef.current?.focus());
+  }, [showSoloConfirm]);
+
+  // Enter starts the round when the host isn't typing in a field.
+  // Skip when a button already has focus — native Enter activates it.
+  useEffect(() => {
+    if (!room.isHost) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const t = e.target;
+      if (
+        t instanceof HTMLInputElement ||
+        t instanceof HTMLTextAreaElement ||
+        t instanceof HTMLSelectElement ||
+        t instanceof HTMLButtonElement ||
+        (t instanceof HTMLElement && (t.isContentEditable || t.closest('button')))
+      ) {
+        return;
+      }
+      if (showSoloConfirm) {
+        e.preventDefault();
+        setShowSoloConfirm(false);
+        room.startRound();
+        return;
+      }
+      if (!canStart) return;
+      e.preventDefault();
+      if (connectedCount < SOLO_WARNING_THRESHOLD) {
+        setShowSoloConfirm(true);
+        return;
+      }
+      room.startRound();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [room, canStart, showSoloConfirm, connectedCount]);
+
   const ownerName = (playerId: string | null) => state.players.find((p) => p.id === playerId)?.nickname ?? 'Someone';
   const seedLabel = (id: string) => seedBank.find((s) => s.id === id)?.label ?? 'a wire photo';
   const describeSource = (source: NonNullable<typeof nextSource>) =>
@@ -121,251 +169,308 @@ export function Lobby({ room }: { room: RoomApi }) {
   const nextStoryLabel = uniqueWinner
     ? `Most-voted — ${describeSource(uniqueWinner)}`
     : needsTiebreak
-      ? 'Tied for most votes — host must Choose one'
+      ? 'Tied — host must Choose one'
       : selectedSource && isVoteTie
-        ? `Host tiebreak — ${describeSource(selectedSource)}`
+        ? `Host pick — ${describeSource(selectedSource)}`
         : selectedSource
           ? `Host's pick — ${describeSource(selectedSource)}`
           : tab === 'source'
-            ? 'Random pick from the shelf below'
-            : 'Random pick from the Source tab';
+            ? 'Random from the shelf'
+            : 'Random from Source tab';
+
+  const maxPlayersControl = room.isHost ? (
+    <div
+      className="flex items-center gap-1 shrink-0"
+      aria-label={`${connectedCount} of ${state.maxPlayers} players`}
+    >
+      <span className="font-display font-black text-xl md:text-2xl text-grief leading-none tabular-nums">
+        {connectedCount}
+      </span>
+      <span className="font-display font-bold text-sm md:text-base text-ink3 leading-none">/</span>
+      <button
+        type="button"
+        className="btn-secondary w-7 h-7 md:w-8 md:h-8 !px-0 !py-0 text-base leading-none"
+        onClick={() => setMaxPlayers(state.maxPlayers - 1)}
+        disabled={state.maxPlayers <= Math.max(MIN_PLAYERS, connectedCount)}
+        aria-label="Decrease max players"
+      >
+        −
+      </button>
+      <span className="min-w-[1.25rem] text-center tabular-nums font-display font-black text-xl md:text-2xl text-ink3 leading-none">
+        {state.maxPlayers}
+      </span>
+      <button
+        type="button"
+        className="btn-secondary w-7 h-7 md:w-8 md:h-8 !px-0 !py-0 text-base leading-none"
+        onClick={() => setMaxPlayers(state.maxPlayers + 1)}
+        disabled={state.maxPlayers >= MAX_PLAYERS}
+        aria-label="Increase max players"
+      >
+        +
+      </button>
+    </div>
+  ) : (
+    <div
+      className="flex items-baseline gap-0.5 shrink-0"
+      aria-label={`${connectedCount} of ${state.maxPlayers} players`}
+    >
+      <span className="font-display font-black text-xl md:text-2xl text-grief leading-none">{connectedCount}</span>
+      <span className="font-display font-bold text-sm md:text-base text-ink3 leading-none">/{state.maxPlayers}</span>
+    </div>
+  );
+
+  const settingsPanel = (
+    <div className={`flex flex-col gap-2.5 ${!room.isHost ? 'opacity-70' : ''}`}>
+      {!room.isHost && (
+        <p className="text-sm text-ink3 italic px-0.5">View only — only the host can change these.</p>
+      )}
+      <SettingRow
+        icon="⏰"
+        title="Timed round"
+        hint={
+          settings.untimed
+            ? 'Off — file when ready, no time limit'
+            : 'On — round length countdown applies'
+        }
+        control={
+          <Toggle
+            checked={!settings.untimed}
+            onChange={(v) => setSettings({ untimed: !v })}
+            disabled={!room.isHost}
+            aria-label="Timed round"
+          />
+        }
+      />
+
+      <SettingRow
+        icon="⏱️"
+        title="Round length"
+        className={lengthDisabled ? 'opacity-55' : undefined}
+        hint={
+          lengthDisabled
+            ? 'Doesn’t apply while Timed round is off.'
+            : settings.timerMode === 'auto'
+              ? autoEstimate != null
+                ? `Scales with text — about ${formatSecs(autoEstimate)} for this source.`
+                : 'Scales with how much text is in the image.'
+              : settings.timerMode === 'custom'
+                ? `Host-picked length: ${formatSecs(settings.customSeconds)}.`
+                : `${timerModeLabel(settings.timerMode)} — ${formatSecs(resolvedPreview)} per round.`
+        }
+        control={
+          <div className="flex flex-wrap gap-1.5 justify-end" role="group" aria-label="Round length">
+            {LENGTH_OPTIONS.map(({ mode, label, sub }) => (
+              <button
+                key={mode}
+                type="button"
+                className="segmented-item !px-2.5 !py-1.5 flex flex-col items-center leading-tight gap-0.5"
+                data-active={String(settings.timerMode === mode && !lengthDisabled)}
+                disabled={lengthDisabled || !room.isHost}
+                onClick={() => setSettings({ timerMode: mode })}
+              >
+                <span>{label}</span>
+                <span className="text-[10px] font-semibold normal-case tracking-normal opacity-80">{sub}</span>
+              </button>
+            ))}
+          </div>
+        }
+        footer={
+          settings.timerMode === 'custom' && !lengthDisabled ? (
+            <div className="mt-2">
+              <CustomTimePicker
+                seconds={settings.customSeconds}
+                onChange={(secs) => setSettings({ customSeconds: secs })}
+                disabled={!room.isHost}
+              />
+            </div>
+          ) : undefined
+        }
+      />
+
+      <SettingRow
+        icon="🗳️"
+        title="Voting"
+        hint={state.votingEnabled ? 'On — a ballot follows every round' : 'Off — just for laughs'}
+        control={<Toggle checked={state.votingEnabled} onChange={room.setVoting} disabled={!room.isHost} aria-label="Enable voting" />}
+      />
+
+      <SettingRow
+        icon="✂️"
+        title="Redaction limit"
+        hint={
+          capped
+            ? `Cap at ${capValue} redaction${capValue === 1 ? '' : 's'}`
+            : 'Off — unlimited redactions'
+        }
+        control={
+          <Toggle
+            checked={capped}
+            onChange={setRedactionCapped}
+            disabled={!room.isHost}
+            aria-label="Cap redactions"
+          />
+        }
+        footer={
+          capped ? (
+            <div className="mt-2 flex items-center gap-3">
+              <input
+                type="range"
+                min={REDACTION_CAP_MIN}
+                max={REDACTION_CAP_MAX}
+                step={1}
+                value={capValue}
+                disabled={!room.isHost}
+                onChange={(e) => setCapValue(Number(e.target.value))}
+                className="flex-1 min-w-0 h-2 accent-grief cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Maximum redactions"
+                aria-valuemin={REDACTION_CAP_MIN}
+                aria-valuemax={REDACTION_CAP_MAX}
+                aria-valuenow={capValue}
+              />
+              <span className="w-9 shrink-0 text-right tabular-nums font-display font-bold text-lg leading-none">
+                {capValue}
+              </span>
+            </div>
+          ) : undefined
+        }
+      />
+    </div>
+  );
+
+  const renderStartButton = () =>
+    room.isHost ? (
+      /* Wrapper stays overflow-visible so nothing clips the cue; the chase itself
+         rides the padding-box edge (inner side of the black border). */
+      <div className="relative flex-[1.15] min-w-0 min-h-[2.5rem] md:min-h-0 self-stretch overflow-visible">
+        <button
+          ref={startBtnRef}
+          className="btn-primary relative isolate overflow-hidden w-full h-full text-[15px] sm:text-base md:text-lg !py-2 md:!py-3 !px-3 sm:!px-4 leading-tight whitespace-nowrap"
+          disabled={!canStart}
+          onClick={handleStartClick}
+        >
+          {/* Slow dual-dash perimeter — editorial ink tick, not a neon chase.
+              pathLength=1 so dash pattern is size-independent; inset ~½ stroke.
+              Speed: --outline-chase-duration in src/index.css (HMR-friendly). */}
+          {activeStoryId ? (
+            <svg
+              className="pointer-events-none absolute inset-0 z-[1] h-full w-full text-paper/28"
+              aria-hidden="true"
+            >
+              <rect
+                className="outline-chase"
+                x={1}
+                y={1}
+                width="calc(100% - 2px)"
+                height="calc(100% - 2px)"
+                rx={3}
+                ry={3}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1}
+                strokeLinecap="round"
+                pathLength={1}
+                strokeDasharray="0.055 0.445 0.055 0.445"
+              />
+            </svg>
+          ) : null}
+          <span className="relative z-[2]">Start Editing →</span>
+        </button>
+      </div>
+    ) : (
+      <div className="flex-1 min-w-0 text-center px-2 py-2 md:py-2">
+        <div className="text-sm font-bold text-ink3 uppercase tracking-wide">Not editing yet</div>
+        <div className="text-sm text-ink3 italic">Waiting for the host to start…</div>
+      </div>
+    );
 
   return (
-    // min-w-0: grid/flex children default to min-width:auto, so a wide Source
-    // shelf image can inflate this past <main>'s padded content box — left
-    // padding stays, right card border clips the viewport. Round settings is
-    // text-only and never hits that path.
-    <div className="grid gap-4 md:grid-cols-[340px_1fr] animate-fade-up min-w-0">
-      {/* Left: the newsroom roster — Gartic puts players on the left, settings
-          on the right. On narrow screens the Host's actual task (source /
-          settings) comes first instead; the roster follows. Both columns are
-          sized to their own natural content (grid's default item sizing) —
-          the right column is typically much taller, and earlier attempts to
-          stretch/match the two via flex-1+min-h-0 chains caused a deeply
-          nested min-height to silently overflow past an ancestor's box (see
-          the source-material card below). max-h + overflow-y-auto locally
-          (here, and on the card) is simpler and doesn't have that failure
-          mode. */}
-      <div className="order-2 md:order-1 flex flex-col gap-2 min-w-0">
-        <div className="card p-3 flex flex-col gap-2">
-          <div className="flex items-center justify-between pb-1.5 border-b border-ink/25">
-            <div className="kicker text-sm">The Newsroom</div>
-            {/* Big, hard-to-miss occupancy readout — not a small pill. */}
-            <div className="flex items-baseline gap-0.5">
-              <span className="font-display font-black text-2xl text-grief leading-none">{connectedCount}</span>
-              <span className="font-display font-bold text-base text-ink3 leading-none">/{state.maxPlayers}</span>
-            </div>
+    // Locked to the remaining dvh (App sets overflow-hidden).
+    // Mobile (<md): Gartic-style one screen — player rail / tab panel / Invite+Start bar.
+    // Desktop (md+): 2-column Players + tabs (unchanged).
+    <div className="flex flex-col md:grid md:grid-cols-[340px_1fr] gap-2 sm:gap-3 md:gap-4 animate-fade-up min-w-0 flex-1 min-h-0 h-full">
+      {/* —— Mobile top: horizontal player rail + capacity stepper ——
+          Content-sized only (never flex-1 / h-full) so it can’t leave a void
+          above the tab panel. Cap at ~half viewport if the rail is crowded. */}
+      <div className="md:hidden shrink-0 grow-0 card p-2 flex flex-col gap-1.5 min-w-0 max-h-[45%]">
+        <div className="flex items-center justify-between gap-2 shrink-0">
+          <div className="min-w-0">
+            <div className="kicker text-[10px]">In the room</div>
+            <h2 className="font-display font-black text-base leading-none tracking-tight mt-0.5">Players</h2>
           </div>
-
-          {room.isHost && (
-            <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-[3px] card-inset">
-              <div className="text-sm font-bold">Max players</div>
-              <div className="flex items-center gap-1">
-                <button className="btn-secondary w-9 h-9 !px-0 !py-0 text-lg" onClick={() => setMaxPlayers(state.maxPlayers - 1)} disabled={state.maxPlayers <= Math.max(MIN_PLAYERS, connectedCount)}>−</button>
-                <span className="w-8 text-center tabular-nums font-display font-bold text-lg">{state.maxPlayers}</span>
-                <button className="btn-secondary w-9 h-9 !px-0 !py-0 text-lg" onClick={() => setMaxPlayers(state.maxPlayers + 1)} disabled={state.maxPlayers >= MAX_PLAYERS}>+</button>
-              </div>
-            </div>
-          )}
-
-          {/* Scrolls once the roster (real + empty seats) runs past ~10 rows
-              at this card size, instead of stretching the whole page taller. */}
-          <div className="max-h-[26rem] overflow-y-auto themed-scroll pr-0.5 -mr-0.5">
-            <PlayerList players={state.players} meId={room.playerId} canRemove={room.isHost} onRemove={room.removePlayer} maxPlayers={state.maxPlayers} />
-          </div>
-          <p className="text-sm text-ink3 italic leading-snug">Any staffer may file a screenshot for the next edition.</p>
+          {maxPlayersControl}
         </div>
-
-        {/* Live room code is the invite target (copies join link); QR is
-            secondary. Kept under the roster so hosts reach for it right
-            after seeing who's here — not buried under source/settings. */}
-        <RoomInvite code={state.code} />
+        {/* No overflow-y clip here — rail badges (You / host crown) sit above the avatar.
+            Horizontal scroll lives on the PlayerList rail itself. */}
+        <div className="min-h-0">
+          <PlayerList
+            layout="rail"
+            players={state.players}
+            meId={room.playerId}
+            canRemove={room.isHost}
+            onRemove={room.removePlayer}
+            maxPlayers={state.maxPlayers}
+          />
+        </div>
       </div>
 
-      {/* Right: source + settings as folder tabs directly attached to the
-          panel below (Gartic's Presets/Custom-Settings pattern), then a
-          pinned Start bar. */}
-      {/* A separate "waiting on host" banner used to live here — for anyone
-          but the host it was pure extra height with nothing actionable in
-          it, and on shorter screens that alone was enough to force a
-          scroll. The Start-bar area below already swaps in an "Awaiting the
-          Host…" line for non-hosts, so that's the one place this needs to
-          say anything. */}
-      <div className="order-1 md:order-2 flex flex-col gap-3 min-w-0">
-        <div className="flex flex-col min-w-0">
-          <div className="flex" role="tablist">
-            <TabButton label="Source Material" active={tab === 'source'} onClick={() => setTab('source')} />
-            <TabButton label="Round settings" active={tab === 'settings'} onClick={() => setTab('settings')} />
+      {/* —— Desktop left: content-sized roster, Invite snug underneath ——
+          Do NOT flex-1 the Players card — that left a huge empty gap below
+          the folded-seats row and shoved Invite to the column bottom. */}
+      <div className="hidden md:flex flex-col gap-2 min-w-0 h-full min-h-0">
+        <div className="card p-3 flex flex-col gap-2 shrink-0 grow-0 max-h-[50%] min-h-0 overflow-hidden">
+          <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-ink/25 shrink-0">
+            <div className="min-w-0">
+              <div className="kicker text-[10px]">In the room</div>
+              <h2 className="font-display font-black text-xl leading-none tracking-tight mt-0.5">Players</h2>
+            </div>
+            {maxPlayersControl}
+          </div>
+          <div className="min-h-0 overflow-y-auto themed-scroll pr-0.5 -mr-0.5">
+            <PlayerList
+              players={state.players}
+              meId={room.playerId}
+              canRemove={room.isHost}
+              onRemove={room.removePlayer}
+              maxPlayers={state.maxPlayers}
+            />
+          </div>
+          <p className="text-sm text-ink3 italic leading-snug shrink-0">
+            Any staffer may file a screenshot for the next edition.
+          </p>
+        </div>
+        <div className="shrink-0">
+          <RoomInvite code={state.code} />
+        </div>
+      </div>
+
+      {/* —— Middle (both): tabbed panel fills remaining height; content scrolls inside —— */}
+      <div className="flex flex-col gap-2 min-w-0 flex-1 min-h-0 md:h-full">
+        <div className="flex flex-col min-w-0 min-h-0 flex-1 overflow-hidden">
+          <div className="flex shrink-0" role="tablist">
+            <TabButton label="Source" longLabel="Source Material" active={tab === 'source'} onClick={() => setTab('source')} />
+            <TabButton label="Settings" longLabel="Round settings" active={tab === 'settings'} onClick={() => setTab('settings')} />
           </div>
 
-          {/* Fixed height at md+ (not just a cap) so the panel doesn't
-              visibly resize when switching Source Material <-> Round
-              Settings — the far shorter settings content just leaves
-              blank space below instead of shrinking the box. Content
-              taller than this (more filed screenshots) scrolls internally
-              instead of growing the page.
-
-              The height itself is viewport-responsive rather than a flat
-              42rem: a flat value made BOTH tabs always claim the full
-              height — fine on a tall window, but on a shorter one that's
-              taller than everything else combined actually leaves room
-              for, which is exactly what brought the page-level scrollbar
-              back. min(42rem, 100dvh - ~18.5rem-for-everything-else) still
-              gives every tab the identical height (still purely
-              viewport-driven, not content-driven — the "no resize between
-              tabs" guarantee is untouched), it just scales that shared
-              height down on shorter windows instead of forcing a size
-              that doesn't fit. ~18.5rem covers the header, main padding,
-              tab bar, "Next story" line and Start bar; shorter shelf
-              thumbnails keep the 2-card base state near the fold. */}
-          <div className="card !rounded-tl-none -mt-px p-3 flex flex-col gap-2.5 min-w-0 md:h-[min(42rem,calc(100dvh_-_18.5rem))] md:overflow-y-auto themed-scroll">
+          <div className="card !rounded-tl-none -mt-px p-2 sm:p-3 flex flex-col gap-2 min-w-0 flex-1 min-h-0 overflow-y-auto themed-scroll">
             {tab === 'source' ? (
-              // "Choose Today's Story" (inside SourceUpload's shelf) is
-              // already the section title — an outer kicker here was just
-              // repeating it.
-              <SourceUpload room={room} />
+              <SourceUpload room={room} onHostChose={focusStartEditing} />
             ) : (
-              // Everyone sees the real settings panel now, not a condensed
-              // pill summary for non-hosts — same layout, same "size never
-              // changes between tabs" guarantee either way. Non-hosts just
-              // get every control disabled (still legible/inspectable, not
-              // interactive) since only the host can change these.
-              <div className={`flex flex-col gap-2.5 ${!room.isHost ? 'opacity-70' : ''}`}>
-                <SettingRow
-                  icon="⏰"
-                  title="Timed round"
-                  hint={
-                    settings.untimed
-                      ? 'Off — file when ready, no time limit'
-                      : 'On — round length countdown applies'
-                  }
-                  control={
-                    <Toggle
-                      checked={!settings.untimed}
-                      onChange={(v) => setSettings({ untimed: !v })}
-                      disabled={!room.isHost}
-                      aria-label="Timed round"
-                    />
-                  }
-                />
-
-                {/* Round length — same SettingRow shell as Timed round/Voting/Redaction
-                    (label block left, pills right, vertically centered). Untimed
-                    disables these. Pills stay flush-right; wrap on narrow widths. */}
-                <SettingRow
-                  icon="⏱️"
-                  title="Round length"
-                  className={lengthDisabled ? 'opacity-55' : undefined}
-                  hint={
-                    lengthDisabled
-                      ? 'Doesn’t apply while Timed round is off.'
-                      : settings.timerMode === 'auto'
-                        ? autoEstimate != null
-                          ? `Scales with text — about ${formatSecs(autoEstimate)} for this source.`
-                          : 'Scales with how much text is in the image.'
-                        : settings.timerMode === 'custom'
-                          ? `Host-picked length: ${formatSecs(settings.customSeconds)}.`
-                          : `${timerModeLabel(settings.timerMode)} — ${formatSecs(resolvedPreview)} per round.`
-                  }
-                  control={
-                    <div className="flex flex-wrap gap-1.5 justify-end" role="group" aria-label="Round length">
-                      {LENGTH_OPTIONS.map(({ mode, label, sub }) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          className="segmented-item !px-2.5 !py-1.5 flex flex-col items-center leading-tight gap-0.5"
-                          data-active={String(settings.timerMode === mode && !lengthDisabled)}
-                          disabled={lengthDisabled || !room.isHost}
-                          onClick={() => setSettings({ timerMode: mode })}
-                        >
-                          <span>{label}</span>
-                          <span className="text-[10px] font-semibold normal-case tracking-normal opacity-80">{sub}</span>
-                        </button>
-                      ))}
-                    </div>
-                  }
-                  footer={
-                    settings.timerMode === 'custom' && !lengthDisabled ? (
-                      <div className="mt-2">
-                        <CustomTimePicker
-                          seconds={settings.customSeconds}
-                          onChange={(secs) => setSettings({ customSeconds: secs })}
-                          disabled={!room.isHost}
-                        />
-                      </div>
-                    ) : undefined
-                  }
-                />
-
-                <SettingRow
-                  icon="🗳️"
-                  title="Voting"
-                  hint={state.votingEnabled ? 'On — a ballot follows every round' : 'Off — just for laughs'}
-                  control={<Toggle checked={state.votingEnabled} onChange={room.setVoting} disabled={!room.isHost} aria-label="Enable voting" />}
-                />
-
-                <SettingRow
-                  icon="✂️"
-                  title="Redaction limit"
-                  hint={
-                    capped
-                      ? `Cap at ${capValue} redaction${capValue === 1 ? '' : 's'}`
-                      : 'Off — unlimited redactions'
-                  }
-                  control={
-                    <Toggle
-                      checked={capped}
-                      onChange={setRedactionCapped}
-                      disabled={!room.isHost}
-                      aria-label="Cap redactions"
-                    />
-                  }
-                  footer={
-                    capped ? (
-                      <div className="mt-2 flex items-center gap-3">
-                        <input
-                          type="range"
-                          min={REDACTION_CAP_MIN}
-                          max={REDACTION_CAP_MAX}
-                          step={1}
-                          value={capValue}
-                          disabled={!room.isHost}
-                          onChange={(e) => setCapValue(Number(e.target.value))}
-                          className="flex-1 min-w-0 h-2 accent-grief cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                          aria-label="Maximum redactions"
-                          aria-valuemin={REDACTION_CAP_MIN}
-                          aria-valuemax={REDACTION_CAP_MAX}
-                          aria-valuenow={capValue}
-                        />
-                        <span className="w-9 shrink-0 text-right tabular-nums font-display font-bold text-lg leading-none">
-                          {capValue}
-                        </span>
-                      </div>
-                    ) : undefined
-                  }
-                />
-              </div>
+              settingsPanel
             )}
           </div>
         </div>
 
-        {/* mt-auto aligns this with the newsroom panel's bottom edge on
-            mobile (where the tab panel above isn't flex-1). No longer
-            sticky — the layout is height-bound now, so this never needs to
-            float over scrolling content, and sticky was making it overlap
-            the "Next story" line above it. */}
-        <div className="mt-auto md:mt-0 shrink-0 flex flex-col gap-1.5">
-          <p className="text-base text-ink2 text-center px-1 leading-snug">
+        {/* Bottom action bar — always visible; no page scroll needed.
+            One Start control (ref / Enter focus). Invite joins the bar on mobile only. */}
+        <div className="shrink-0 flex flex-col gap-1">
+          <p className="text-xs sm:text-sm md:text-base text-ink2 text-center px-1 leading-snug">
             📰 <b>Next story:</b> {nextStoryLabel}
           </p>
-          <div className="card p-2 shadow-clip flex items-center gap-2">
-            {room.isHost ? (
-              <button className="btn-primary text-lg py-3 flex-1" disabled={!canStart} onClick={handleStartClick}>
-                Start Editing →
-              </button>
-            ) : (
-              <span className="flex-1 text-center text-base text-ink3 italic">Awaiting the Host…</span>
-            )}
+          <div className="card overflow-visible p-1.5 md:p-2 shadow-clip flex items-stretch gap-1.5 md:gap-1.5 min-h-0">
+            <div className="flex-[1.25] min-w-0 md:hidden self-stretch overflow-visible">
+              <RoomInvite code={state.code} compact />
+            </div>
+            {renderStartButton()}
           </div>
         </div>
       </div>
@@ -388,6 +493,7 @@ export function Lobby({ room }: { room: RoomApi }) {
             <div className="flex items-center gap-2 mt-2 w-full">
               <button className="btn-secondary flex-1" onClick={() => setShowSoloConfirm(false)}>Wait for more</button>
               <button
+                ref={soloStartBtnRef}
                 className="btn-primary flex-1"
                 onClick={() => { setShowSoloConfirm(false); room.startRound(); }}
               >
@@ -404,20 +510,31 @@ export function Lobby({ room }: { room: RoomApi }) {
 /** A folder-tab attached to the panel below it (Gartic's Presets/Custom
  * Settings tabs): the active tab shares the panel's border and background
  * with no seam; inactive tabs sit slightly recessed. */
-function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function TabButton({
+  label,
+  longLabel,
+  active,
+  onClick,
+}: {
+  label: string;
+  longLabel: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`relative px-5 py-2.5 text-base font-slab font-bold uppercase tracking-wide border-2 rounded-t-[4px] transition-colors -mb-px ${
+      className={`relative px-3 sm:px-5 py-2 sm:py-2.5 text-sm sm:text-base font-slab font-bold uppercase tracking-wide border-2 rounded-t-[4px] transition-colors -mb-px ${
         active
           ? 'bg-papercard border-ink border-b-papercard text-ink z-10'
           : 'bg-paper2 border-ink/30 border-b-ink text-ink3 hover:text-ink hover:bg-paper3'
       }`}
     >
-      {label}
+      <span className="sm:hidden">{label}</span>
+      <span className="hidden sm:inline">{longLabel}</span>
     </button>
   );
 }

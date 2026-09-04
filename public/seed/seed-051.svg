@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1012" viewBox="0 0 720 1012" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1012" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">LP</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Linh Popescu</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Product Manager at Aspen Energy LLC | Parent | Always learning</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">Monday started with a mess. One unreliable</tspan><tspan x="36" dy="36">transfer breaks a whole morning.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">By Wednesday the pattern was obvious. The</tspan><tspan x="36" dy="36">express bus only helps if I leave at the time</tspan><tspan x="36" dy="36">I claim I will.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Friday I finally named it out loud. Time is</tspan><tspan x="36" dy="36">the real toll.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Walk segments improve mood more than you</tspan><tspan x="36" dy="36">expect.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I keep a light rain layer in my bag year-round</tspan><tspan x="36" dy="36">now.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Multimodal options increase resilience.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I use the delay time to stretch instead of</tspan><tspan x="36" dy="36">refreshing the app angrily.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">A calmer arrival is worth a slightly earlier</tspan><tspan x="36" dy="36">alarm.</tspan></text>
+  <line x1="36" y1="956" x2="684" y2="956" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="990" fill="#00000099" font-size="18">♥ 510   💬 30</text>
+  <text x="684" y="990" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

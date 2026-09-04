@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="436" viewBox="0 0 720 436" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="436" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">BZ</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">Bongani Z. Johnson</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@hiro.mitchell</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26"><tspan x="36" dy="0">I used to avoid looking at our budget. That</tspan><tspan x="36" dy="36">was the expensive habit.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Insurance review found coverage we were paying</tspan><tspan x="36" dy="36">for twice.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">One step at a time.</tspan></text>
+  <line x1="36" y1="380" x2="684" y2="380" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="414" fill="#536471" font-size="18">♥ 149   ↺ 29   💬 29</text>
+  <text x="684" y="414" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>

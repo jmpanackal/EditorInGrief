@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1048" viewBox="0 0 720 1048" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1048" fill="#fffdf7"/>
+  <rect x="0" y="0" width="720" height="96" fill="#111111"/>
+  <circle cx="64" cy="56" r="28" fill="#111111"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">HT</text>
+  <text x="108" y="42" fill="#ffffff" font-size="24" font-weight="700">Harbor Tribune</text>
+  <text x="108" y="72" fill="#ffd7d7" font-size="18">EDUCATION</text>
+  <text x="36" y="146" fill="#1a1a1a" font-size="26"><tspan x="36" dy="0">Breaks are not optional if you want safe care.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Breaks are not optional if you want safe care.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">A respiratory therapist taught me a trick that</tspan><tspan x="36" dy="36">saved minutes we needed.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Compassion without staffing is a slogan.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">What would you have done?</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Handoffs are where quality lives or dies.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We celebrated a quiet win that will never make</tspan><tspan x="36" dy="36">a highlight reel.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Near misses deserve attention, not silence.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Supply shortages forced creative but safe</tspan><tspan x="36" dy="36">workarounds.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Plain language is clinical skill.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Breaks are not optional if you want safe care.</tspan></text>
+  <line x1="36" y1="992" x2="684" y2="992" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1026" fill="#b91c1c" font-size="18">♥ 530   💬 50</text>
+  <text x="684" y="1026" fill="#b91c1c" font-size="16" font-weight="600" text-anchor="end">NEWS</text>
+</svg>

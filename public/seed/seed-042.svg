@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="544" viewBox="0 0 720 544" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="544" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">CB</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">Chris Berg</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@brian.owusu</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26"><tspan x="36" dy="0">I canceled a recurring meeting that had</tspan><tspan x="36" dy="36">outlived its purpose.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">If you lead, your calendar is a culture</tspan><tspan x="36" dy="36">document.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The client was fine. The process was not.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Two people on the team had been carrying</tspan><tspan x="36" dy="36">context that never made it into the doc.</tspan></text>
+  <line x1="36" y1="488" x2="684" y2="488" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="522" fill="#536471" font-size="18">♥ 239   ↺ 119   💬 59</text>
+  <text x="684" y="522" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>

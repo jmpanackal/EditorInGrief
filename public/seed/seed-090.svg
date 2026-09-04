@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1156" viewBox="0 0 720 1156" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1156" fill="#fffdf7"/>
+  <rect x="0" y="0" width="720" height="96" fill="#111111"/>
+  <circle cx="64" cy="56" r="28" fill="#111111"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">CL</text>
+  <text x="108" y="42" fill="#ffffff" font-size="24" font-weight="700">City Ledger</text>
+  <text x="108" y="72" fill="#ffd7d7" font-size="18">COMMUNITY</text>
+  <text x="36" y="146" fill="#1a1a1a" font-size="26"><tspan x="36" dy="0">Showing up quietly still counts as showing up.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I learned the difference between what looks</tspan><tspan x="36" dy="36">good and what is needed.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We followed the intake process instead of</tspan><tspan x="36" dy="36">improvising "helpfulness."</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Proximity changes what you think is possible.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Filing this under things I want to remember.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Proximity changes what you think is possible.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We followed the intake process instead of</tspan><tspan x="36" dy="36">improvising "helpfulness."</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Dignity matters as much as efficiency.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Show up consistently beats showing up loudly</tspan><tspan x="36" dy="36">once.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Skill-based volunteering multiplies impact</tspan><tspan x="36" dy="36">when matched well.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I met neighbors I had only ever waved at from</tspan><tspan x="36" dy="36">a driveway.</tspan></text>
+  <line x1="36" y1="1100" x2="684" y2="1100" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1134" fill="#b91c1c" font-size="18">♥ 611   💬 11</text>
+  <text x="684" y="1134" fill="#b91c1c" font-size="16" font-weight="600" text-anchor="end">NEWS</text>
+</svg>

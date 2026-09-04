@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1084" viewBox="0 0 720 1084" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1084" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1877f2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">RT</text>
+  <text x="108" y="42" fill="#050505" font-size="24" font-weight="700">Reese Thompson</text>
+  <text x="108" y="72" fill="#65676b" font-size="18">1 d · 🌎 Public</text>
+  <text x="36" y="146" fill="#050505" font-size="26"><tspan x="36" dy="0">Thank you to the people who make my work</tspan><tspan x="36" dy="36">possible.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Being grateful and being ambitious are</tspan><tspan x="36" dy="36">compatible.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">A coworker left clear notes that saved me an</tspan><tspan x="36" dy="36">hour.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">IT fixed my access issue without making me</tspan><tspan x="36" dy="36">feel foolish.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">That is the update for now.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Name the behavior, not only the person.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">A neighbor took in a package and texted so I</tspan><tspan x="36" dy="36">would not worry.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Appreciation is maintenance for relationships.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The night shift left the station ready for us.</tspan><tspan x="36" dy="36">That is love in logistics.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Name the behavior, not only the person.</tspan></text>
+  <line x1="36" y1="1028" x2="684" y2="1028" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1062" fill="#65676b" font-size="18">Like · Comment · Share</text>
+  <text x="684" y="1062" fill="#1877f2" font-size="16" font-weight="600" text-anchor="end">FACEBOOK</text>
+</svg>

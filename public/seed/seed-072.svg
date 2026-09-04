@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1156" viewBox="0 0 720 1156" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1156" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">AC</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">Abebe Conti</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@amara.shah</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26"><tspan x="36" dy="0">Monday started with a mess. The organizers</tspan><tspan x="36" dy="36">needed hands more than they needed advice.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">By Wednesday the pattern was obvious. We</tspan><tspan x="36" dy="36">followed the intake process instead of</tspan><tspan x="36" dy="36">improvising "helpfulness."</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Friday I finally named it out loud. Dignity</tspan><tspan x="36" dy="36">matters as much as efficiency.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Skill-based volunteering multiplies impact</tspan><tspan x="36" dy="36">when matched well.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I asked what skills were scarce instead of</tspan><tspan x="36" dy="36">assuming mine were.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Listen before you redesign someone else's</tspan><tspan x="36" dy="36">system.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We followed the intake process instead of</tspan><tspan x="36" dy="36">improvising "helpfulness."</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Thank the people who coordinate. Coordination</tspan><tspan x="36" dy="36">is labor.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Childcare made it possible for two parents to</tspan><tspan x="36" dy="36">volunteer longer.</tspan></text>
+  <line x1="36" y1="1100" x2="684" y2="1100" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1134" fill="#536471" font-size="18">♥ 640   ↺ 40   💬 40</text>
+  <text x="684" y="1134" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>

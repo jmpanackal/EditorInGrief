@@ -29,29 +29,32 @@ export default function App() {
   const inRoom = !!room.state && !!room.playerId;
   // Round + countdown need a locked viewport (Gartic-style editor) — no page
   // scroll, compact chrome. Reveal also locks so Prev/Next stay above the fold
-  // while the submission image flex-shrinks. Other phases keep the scrollable shell.
+  // while the submission image flex-shrinks. Lobby + scoreboard lock too so
+  // Start / Play again stay in one mobile viewport (internal scroll only).
   const phase = room.state?.phase;
   const isEditorPhase = phase === 'countdown' || phase === 'round';
-  const isViewportLocked = isEditorPhase || phase === 'reveal';
+  const isLobbyPhase = phase === 'lobby';
+  const isScoreboardPhase = phase === 'scoreboard';
+  const isViewportLocked =
+    isEditorPhase || phase === 'reveal' || isLobbyPhase || isScoreboardPhase;
 
   return (
     <div className={isViewportLocked ? 'h-dvh flex flex-col overflow-hidden' : 'min-h-full md:h-dvh flex flex-col'}>
-      {inRoom && <Header room={room} compact={isEditorPhase} />}
+      {inRoom && <Header room={room} compact={isEditorPhase} phase={phase} />}
 
       {/* Was capped at 5xl (1024px) for in-room phases, reading as a small
-          island on large monitors — Lobby especially. At md+ this is also
-          the app's one scroll container: bounded to the remaining viewport
-          height below the header so a tall phase (the Lobby, mainly) scrolls
-          internally instead of pushing the whole page taller than the
-          window. Below md, phases keep the simpler natural page flow —
-          except locked phases (editor + reveal), which fill the remaining dvh. */}
+          island on large monitors — Lobby especially. Locked phases fill the
+          remaining dvh with no page scroll; other phases scroll naturally
+          below md and inside <main> at md+. */}
       <main
         className={
           isViewportLocked
-            ? `flex-1 min-h-0 overflow-hidden flex flex-col mx-auto w-full max-w-[1600px] ${
+            ? `flex-1 min-h-0 overflow-hidden flex flex-col mx-auto w-full max-w-[1600px] min-w-0 ${
                 isEditorPhase
                   ? 'px-2 py-2 sm:px-3 sm:py-2.5'
-                  : 'px-3 py-2.5 sm:px-4 sm:py-3'
+                  : isLobbyPhase || isScoreboardPhase
+                    ? 'px-2.5 py-2 sm:px-4 sm:py-3'
+                    : 'px-3 py-2.5 sm:px-4 sm:py-3'
               }`
             : 'md:flex-1 md:min-h-0 md:overflow-y-auto md:flex md:flex-col mx-auto w-full min-w-0 p-4 sm:p-6 max-w-[1600px]'
         }
@@ -103,13 +106,36 @@ function PhaseView({ room, clockOffsetMs }: { room: ReturnType<typeof useRoom>; 
   }
 }
 
-function Header({ room, compact = false }: { room: ReturnType<typeof useRoom>; compact?: boolean }) {
+function phaseTitle(phase: string | undefined): string | null {
+  switch (phase) {
+    case 'lobby': return 'Lobby';
+    case 'countdown':
+    case 'round': return 'Editing';
+    case 'reveal': return 'Reveal';
+    case 'voting': return 'Voting';
+    case 'scoreboard': return 'Final Edition';
+    default: return null;
+  }
+}
+
+function Header({
+  room,
+  compact = false,
+  phase,
+}: {
+  room: ReturnType<typeof useRoom>;
+  compact?: boolean;
+  phase?: string;
+}) {
   const state = room.state!;
   // A stray click on "Leave" mid-game drops you out of a live room with no
   // way back in but the invite link — worth one confirm tap.
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const title = phaseTitle(phase);
   return (
-    <header className={`shrink-0 z-10 bg-paper/90 backdrop-blur-sm border-b-[3px] border-double border-ink ${compact ? '' : 'sticky top-0'}`}>
+    // z-40 stays above lobby tabs (z-10) and vote ♥ badges (z-20) so sticky
+    // chrome never loses to scrolling content.
+    <header className={`shrink-0 z-40 bg-paper/90 backdrop-blur-sm border-b-[3px] border-double border-ink ${compact ? '' : 'sticky top-0'}`}>
       <div className={`max-w-[1600px] mx-auto ${compact ? 'px-2 sm:px-3' : 'px-4 sm:px-6'}`}>
         {/* Top dateline strip — hidden in-round to reclaim vertical space */}
         {!compact && (
@@ -121,12 +147,17 @@ function Header({ room, compact = false }: { room: ReturnType<typeof useRoom>; c
         )}
         {/* Masthead row — Leave far left, title dead-centered (equal 1fr
             flanks so off-center side content never pulls it off-axis). */}
-        <div className={`grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3 ${compact ? 'py-1.5' : 'py-2.5'}`}>
+        <div className={`grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3 ${compact ? 'py-1.5' : 'py-2'}`}>
           <div className="justify-self-start">
             <button className={`btn-ghost ${compact ? '!py-1 !px-2.5 text-sm' : 'text-base'}`} onClick={() => setConfirmLeave(true)}>Leave</button>
           </div>
-          <div className={`font-display font-black leading-none tracking-tight text-center whitespace-nowrap ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'}`}>
-            Editor in <span className="text-grief">Grief</span>
+          <div className="text-center min-w-0">
+            <div className={`font-display font-black leading-none tracking-tight whitespace-nowrap ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'}`}>
+              Editor in <span className="text-grief">Grief</span>
+            </div>
+            {title && !compact && (
+              <div className="kicker text-[10px] sm:text-[11px] mt-0.5 text-ink2">{title}</div>
+            )}
           </div>
           <div className="flex items-center gap-2 justify-self-end">
             {!compact && state.votingEnabled && <span className="pill hidden sm:inline-flex">Voting</span>}

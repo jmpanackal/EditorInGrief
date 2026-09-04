@@ -109,7 +109,14 @@ type Busy = 'idle' | 'preparing' | 'ocr';
 
 type MenuState = { x: number; y: number } | null;
 
-export function SourceUpload({ room }: { room: RoomApi }) {
+export function SourceUpload({
+  room,
+  onHostChose,
+}: {
+  room: RoomApi;
+  /** Fired after the host picks a story so the lobby can focus Start Editing. */
+  onHostChose?: () => void;
+}) {
   const coarsePointer = useCoarsePointer();
   const pendingSources = room.state?.pendingSources ?? [];
   const pending = pendingSources.at(-1) ?? null;
@@ -139,11 +146,18 @@ export function SourceUpload({ room }: { room: RoomApi }) {
 
   /** Arm paste-event fallback — focus the editable shell after render. */
   const armCtrlVPaste = useCallback(() => {
-    setError(null);
     setPastePrompt(true);
+    setError(
+      coarsePointer
+        ? 'Clipboard blocked — long-press the strip and choose Paste, or choose a file.'
+        : 'Clipboard blocked — press Ctrl+V here, or click to choose a file.',
+    );
     if (pastePromptTimer.current) clearTimeout(pastePromptTimer.current);
-    pastePromptTimer.current = setTimeout(() => setPastePrompt(false), 8000);
-  }, []);
+    pastePromptTimer.current = setTimeout(() => {
+      setPastePrompt(false);
+      setError(null);
+    }, 8000);
+  }, [coarsePointer]);
 
   const uploaderName = pending
     ? room.state?.players.find((p) => p.id === pending.uploadedBy)?.nickname ?? 'Someone'
@@ -398,7 +412,7 @@ export function SourceUpload({ room }: { room: RoomApi }) {
     );
   }
 
-  // The shelf always shows ≥2 candidates now (server tops up with wire-photo
+  // The shelf always shows ≥3 candidates now (server tops up with wire-photo
   // fillers — see gameStore.syncFillerSlots), so it's unconditional here.
   // "hasUploads" only flavors the add-tile's copy ("another" vs "a").
   const hasUploads = pendingSources.some((s) => s.uploadedBy != null);
@@ -410,17 +424,15 @@ export function SourceUpload({ room }: { room: RoomApi }) {
       onPointerEnter={() => { pointerOverZone.current = true; }}
       onPointerLeave={() => { pointerOverZone.current = false; }}
     >
-      <SourceShelf room={room} sources={pendingSources}>
-        {/* Filing a screenshot always just ADDS a new tile — it never
-            replaces or displaces an existing one. Same grid cell as a shelf
-            card (one column; stretches to peer height via grid stretch)
-            so it reads as "one more tile," not a full-width strip. */}
+      <SourceShelf room={room} sources={pendingSources} onHostChose={onHostChose}>
+        {/* Slim add strip under the three suggestion cards — paste/file stay
+            primary; no tall empty dashed box competing for lobby height. */}
         <div
           ref={dropTileRef}
           role="button"
           tabIndex={0}
           onClick={() => {
-            // On touch, prefer explicit Choose file / Paste — whole-tile tap still opens picker.
+            // On touch, prefer explicit Choose file / Paste — strip tap still opens picker.
             inputRef.current?.click();
           }}
           onKeyDown={(e) => {
@@ -437,8 +449,8 @@ export function SourceUpload({ room }: { room: RoomApi }) {
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
           onContextMenu={openMenu}
-          className={`rounded-[3px] border-2 border-dashed p-1.5 flex flex-col items-center justify-center gap-1.5 text-center transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-grief/40 h-full min-h-[17.5rem] min-w-0 ${
-            pastePrompt
+          className={`rounded-[3px] border-2 border-dashed px-2 py-1.5 sm:px-3 sm:py-2 flex flex-row flex-wrap items-center gap-x-2 gap-y-1.5 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-grief/40 min-w-0 ${
+            pastePrompt || error
               ? 'border-grief bg-grief/10'
               : dragOver
                 ? 'border-grief bg-grief/10'
@@ -446,13 +458,13 @@ export function SourceUpload({ room }: { room: RoomApi }) {
           } ${working ? 'opacity-60 cursor-wait pointer-events-none' : ''}`}
         >
           {working ? (
-            <>
+            <div className="flex flex-1 items-center gap-2 min-w-0">
               <Spinner />
-              <span className="text-sm text-ink2">{busyLabel}</span>
+              <span className="text-sm text-ink2 truncate">{busyLabel}</span>
               {localPreview && (
-                <img src={localPreview} alt="" className="h-14 w-14 object-cover rounded-[2px] border-2 border-ink opacity-70" />
+                <img src={localPreview} alt="" className="h-8 w-8 object-cover rounded-[2px] border border-ink opacity-70 shrink-0" />
               )}
-            </>
+            </div>
           ) : (
             <>
               {/* Editable shell is separate from the Paste button so clipboard.read()
@@ -476,71 +488,70 @@ export function SourceUpload({ room }: { room: RoomApi }) {
                   e.stopPropagation();
                   void handleFile(file);
                 }}
-                className="w-full flex flex-col items-center justify-center gap-1.5 outline-none caret-transparent min-w-0"
+                className="flex flex-1 items-center gap-1.5 min-w-0 outline-none caret-transparent"
               >
+                <span className="text-lg leading-none text-grief font-bold shrink-0" aria-hidden>+</span>
                 {pastePrompt ? (
-                  <>
-                    <span className="text-base font-bold">
-                      {coarsePointer ? 'Long-press and tap Paste' : 'Press Ctrl+V to paste'}
-                    </span>
-                    <span className="text-sm text-ink3 px-2 leading-snug">
-                      {coarsePointer
-                        ? 'Safari may ask you to confirm Paste — or use Paste image below'
-                        : 'Snip with Win+Shift+S, then paste here — or click to choose a file'}
-                    </span>
-                  </>
+                  <span className="text-sm text-grief font-semibold leading-snug truncate">
+                    {error ?? (coarsePointer
+                      ? 'Long-press → Paste, or choose a file'
+                      : 'Press Ctrl+V here, or choose a file')}
+                  </span>
+                ) : error ? (
+                  <span className="text-sm text-grief font-semibold leading-snug truncate">{error}</span>
                 ) : (
-                  <>
-                    <span className="text-2xl leading-none text-grief" aria-hidden>+</span>
-                    <span className="text-base font-bold">{hasUploads ? 'Add another screenshot' : 'Add a screenshot'}</span>
-                    <span className="text-sm text-ink3 px-2 leading-snug">
-                      {coarsePointer
-                        ? 'After Copy on a screenshot, tap Paste image — or choose a file'
-                        : 'Drop, click, or paste to add a new option — remove any you don\'t want'}
+                  <span className="text-sm font-bold truncate">
+                    {hasUploads ? 'Add another' : 'Add screenshot'}
+                    <span className="font-normal text-ink3">
+                      {coarsePointer ? ' · Paste or file' : ' · Drop, paste, or click'}
                     </span>
-                  </>
+                  </span>
                 )}
               </div>
-              <div className="flex flex-wrap items-center justify-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                 <button
                   type="button"
-                  className={`${coarsePointer ? 'btn-secondary' : 'btn-ghost'} text-sm !py-1.5`}
+                  className={`${coarsePointer ? 'btn-secondary' : 'btn-ghost'} text-sm !py-1 !px-2.5`}
                   disabled={working}
                   onClick={(e) => {
                     e.stopPropagation();
                     void pasteFromClipboardApi();
                   }}
                 >
-                  Paste image
+                  Paste
                 </button>
-                {coarsePointer && (
-                  <button
-                    type="button"
-                    className="btn-ghost text-sm !py-1.5"
-                    disabled={working}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      inputRef.current?.click();
-                    }}
-                  >
-                    Choose file
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="btn-ghost text-sm !py-1 !px-2.5"
+                  disabled={working}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    inputRef.current?.click();
+                  }}
+                >
+                  File
+                </button>
               </div>
             </>
           )}
         </div>
       </SourceShelf>
       {pastePrompt && (
-        <p className="text-xs text-ink2 text-center font-semibold" role="status">
-          {coarsePointer ? (
-            <>Ready for paste — long-press the tile and choose <span className="font-bold">Paste</span>, or tap <span className="font-bold">Paste image</span></>
-          ) : (
-            <>Ready for paste — press <kbd className="font-bold">Ctrl+V</kbd> (or click the tile to choose a file)</>
+        <p className="text-sm text-grief font-semibold text-center leading-snug px-1" role="status">
+          {error ?? (
+            coarsePointer ? (
+              <>Ready for paste — long-press the strip and choose <span className="font-bold">Paste</span>, or tap <span className="font-bold">Paste</span></>
+            ) : (
+              <>Ready for paste — press <kbd className="font-bold">Ctrl+V</kbd> (or click the strip to choose a file)</>
+            )
           )}
         </p>
       )}
-      {error && !pastePrompt && <p className="text-xs text-grief font-semibold text-center">{error}</p>}
+      {error && !pastePrompt && (
+        <p className="text-sm text-grief font-semibold text-center leading-snug px-1" role="alert">
+          {error}
+        </p>
+      )}
       <input
         ref={inputRef}
         type="file"
@@ -554,199 +565,476 @@ export function SourceUpload({ room }: { room: RoomApi }) {
 }
 
 /**
- * The shelf always shows ≥2 candidates (server-enforced — see
+
+ * The shelf always shows ≥3 candidates (server-enforced — see
+
  * gameStore.syncFillerSlots): real player uploads first, wire-bank
- * "filler" sources (Source.uploadedBy === null) padding the rest, so
- * there's always something to compare/choose from, never a single lonely
- * card or an empty state. Voting/Choosing work identically for both kinds
- * since a filler is a normal Source once picked — chrome differs only in
- * tag/label text, optional Shuffle, and a corner Remove on user uploads.
+
+ * "filler" sources (Source.uploadedBy === null) padding the rest.
+
  *
- * Uniform card footer (seed + user) — same rows, gaps, height:
- *   Row 1 — Tag (Suggested | Submitted) + primary label + · word count / Image only
- *   Row 2 — host Choose (tiebreak only) / Shuffle (Shuffle only on fillers; slot always reserved)
- * Vote is a single tappable ♥ circle badge on the thumbnail (top-right) —
- * count + toggle; filled when you've voted. Remove is × top-left.
- *
- * Filing a screenshot only ever ADDS a tile here (see gameStore.uploadSource)
- * — never auto-removes one — so `children` (the "add another" tile) is one
- * more single-column cell in the same grid (not a full-width strip).
+
+ * Mobile (coarse pointer): tap the photo to vote / host-choose on a tie.
+
+ * Desktop: click the photo to inspect; host uses the Choose button.
+
  */
+
 function SourceShelf({
+
   room,
+
   sources,
+
   children,
+
+  onHostChose,
+
 }: {
+
   room: RoomApi;
+
   sources: NonNullable<RoomApi['state']>['pendingSources'];
+
   children?: React.ReactNode;
+
+  onHostChose?: () => void;
+
 }) {
+
   const state = room.state!;
+
   const seedBank = useSeedBank();
+
+  const coarsePointer = useCoarsePointer();
+
+  const act = coarsePointer ? 'Tap' : 'Click';
+
   const [preview, setPreview] = useState<Source | null>(null);
+
   const myVote = room.playerId ? state.sourceVotes[room.playerId] : undefined;
+
   const voteCount = (sourceId: string) => Object.values(state.sourceVotes).filter((id) => id === sourceId).length;
-  // Highlight every card tied for most votes (count > 0). All-zero shelf stays quiet.
+
   const maxVotes = sources.reduce((max, source) => Math.max(max, voteCount(source.id)), 0);
+
   const leadingIds = sources.filter((source) => voteCount(source.id) === maxVotes).map((source) => source.id);
+
   // Host Choose only when there's a tie for the lead (including all-zero).
-  // A unique most-voted winner is locked server-side — no free pick.
+
   const isVoteTie = leadingIds.length > 1;
 
+  const uniqueWinnerId = maxVotes > 0 && leadingIds.length === 1 ? leadingIds[0] : null;
+
+
+
+  // Stable per role + pointer type — do not swap on isVoteTie / uniqueWinnerId.
+  const instruction = room.isHost
+    ? `Choose the image to edit this round. Most ♥ wins, Host can ${coarsePointer ? 'tap' : 'click'} Choose to break a tie.`
+    : coarsePointer
+      ? `Vote for the image you want to edit this round. Host starts when ready.`
+      : `Vote for the image you want to edit this round. Host starts when ready. ${act} a photo to inspect.`;
+
+
+
+  const chooseSource = (sourceId: string, currentlySelected: boolean) => {
+
+    if (!room.isHost) return;
+
+    // Unique most-voted is locked server-side — don't toggle it off.
+
+    if (uniqueWinnerId === sourceId) {
+
+      onHostChose?.();
+
+      return;
+
+    }
+
+    if (!isVoteTie) return;
+
+    if (currentlySelected) {
+
+      room.selectSource(null);
+
+      return;
+
+    }
+
+    room.selectSource(sourceId);
+
+    onHostChose?.();
+
+  };
+
+
+
+  const onImageActivate = (sourceId: string, currentlySelected: boolean, voted: boolean) => {
+
+    // Desktop: inspect only. Mobile: vote, or host-choose on a tie.
+
+    if (!coarsePointer) {
+
+      const source = sources.find((s) => s.id === sourceId);
+
+      if (source) setPreview(source);
+
+      return;
+
+    }
+
+    if (room.isHost && isVoteTie) {
+
+      chooseSource(sourceId, currentlySelected);
+
+      return;
+
+    }
+
+    room.voteForSource(voted ? null : sourceId);
+
+  };
+
+
+
   return (
-    // min-w-0 lets shelf tiles shrink inside the lobby card: otherwise a wide
-    // screenshot's intrinsic width (min-width:auto) expands the outer card past
-    // <main> padding and clips the right border on mobile.
+
     <div className="min-w-0">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-2">
-        <span className="kicker text-sm shrink-0">Choose Today's Story</span>
-        <span className="text-sm text-ink3 leading-snug">
-          Most votes wins. Host breaks a tie — add or remove screenshots any time.
-        </span>
-      </div>
-      <div className="grid gap-2.5 sm:grid-cols-2 min-w-0">
+
+      <header className="mb-1.5 sm:mb-2.5 text-center">
+        <h2 className="font-display font-black text-lg sm:text-2xl leading-none tracking-tight">
+          Today's Story
+        </h2>
+        <div className="hr-double my-1 sm:my-1.5 mx-auto w-14 sm:w-24" />
+        <p className="text-xs sm:text-base font-slab text-ink2 leading-snug max-w-prose mx-auto">
+          {instruction}
+        </p>
+      </header>
+
+      <div className="flex flex-col gap-1.5 sm:gap-2.5 min-w-0">
+        {/* Mobile: one full-width column. md+: three-across wrap, centered. */}
+        <div className="flex flex-col md:flex-row md:flex-wrap md:justify-center gap-3 md:gap-2.5 min-w-0">
+
         {sources.map((source) => {
+
           const isFiller = source.uploadedBy == null;
+
           const seedLabel = isFiller ? seedBank.find((s) => s.id === source.id)?.label : undefined;
+
           const owner = isFiller ? null : state.players.find((player) => player.id === source.uploadedBy)?.nickname ?? 'Someone';
-          const selected = state.selectedSourceId === source.id;
+
+          const selected = state.selectedSourceId === source.id || uniqueWinnerId === source.id;
+
           const votes = voteCount(source.id);
+
           const isLeading = maxVotes > 0 && votes === maxVotes;
+
           const voted = myVote === source.id;
+
           const canRemove = !isFiller && (room.isHost || source.uploadedBy === room.playerId);
-          // Host Choose keeps clip shadow + "Next story" stamp. Vote lead =
-          // grief outline (+ light tint) so max-votes reads clearly at a glance.
+
           const cardChrome = selected
+
             ? 'border-grief bg-grief/5 shadow-clip'
+
             : isLeading
-              ? 'border-grief bg-grief/5'
-              : 'border-ink/35 bg-paper2';
+
+              ? 'border-grief bg-grief/5 shadow-clip md:shadow-none'
+
+              : 'border-ink md:border-ink/35 bg-paper2 shadow-clip md:shadow-none';
+
+          const imageHint = coarsePointer
+
+            ? (room.isHost && isVoteTie
+
+              ? (selected ? `${act} to unchoose` : `${act} to choose`)
+
+              : (voted ? `${act} to unvote` : `${act} to vote`))
+
+            : `${act} to inspect`;
+
+          // Host footer: always show Choose on the locked winner / tied cards.
+
+          const showChoose = room.isHost && (isVoteTie || uniqueWinnerId === source.id);
+
+          const chooseLocked = uniqueWinnerId === source.id;
+
           return (
-            <div key={source.id} className={`rounded-[3px] border-2 p-1.5 flex flex-col gap-1.5 min-w-0 ${cardChrome}`}>
+
+            <div key={source.id} className={`w-full md:w-[calc((100%-1.25rem)/3)] shrink-0 rounded-[3px] border-2 p-2 md:p-1.5 flex flex-col gap-1 min-w-0 ${cardChrome}`}>
+
               <div className="relative min-w-0">
-                <button type="button" onClick={() => setPreview(source)} className="relative block w-full max-w-full rounded-[2px] overflow-hidden border border-ink bg-papercard hover:border-grief focus:outline-none focus:ring-2 focus:ring-grief/50">
-                  {/* Stamp shifts right when Remove × occupies top-left. */}
-                  {selected && (
-                    <span className={`absolute top-1.5 z-10 stamp !px-2 !py-0.5 text-[10px] animate-stamp-in ${canRemove ? 'left-10' : 'left-1.5'}`}>
-                      Next story
-                    </span>
-                  )}
-                  <img
-                    src={source.imageUrl}
-                    alt={isFiller ? (seedLabel ?? 'Suggested story') : `Preview image submitted by ${owner}`}
-                    className="w-full max-w-full h-40 object-contain bg-paper"
-                  />
-                  <span className="block text-xs py-0.5 text-ink2 font-semibold">Click to inspect full size</span>
-                </button>
-                {/* ♥ circle — count + vote toggle (same grief badge as verdict/shelf).
-                    Outside the preview button so tap votes without opening inspect.
-                    Opposite Remove × (top-left); clear of host Choose/Shuffle in footer. */}
+
                 <button
+
                   type="button"
-                  className={`absolute top-2 right-2 z-20 inline-flex items-center justify-center gap-0.5 min-w-10 h-10 px-2 rounded-full border-2 border-ink text-base font-extrabold leading-none shadow-clip tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-grief/50 ${
-                    voted
-                      ? 'bg-grief text-paper'
-                      : 'bg-papercard text-grief hover:bg-grief/10'
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    room.voteForSource(voted ? null : source.id);
-                  }}
-                  aria-pressed={voted}
-                  aria-label={
-                    voted
-                      ? `Remove your vote, ${votes} ${votes === 1 ? 'vote' : 'votes'}`
-                      : `Vote for this story, ${votes} ${votes === 1 ? 'vote' : 'votes'}`
-                  }
-                  title={voted ? 'Remove vote' : 'Vote'}
+
+                  onClick={() => onImageActivate(source.id, selected, voted)}
+
+                  className="relative block w-full max-w-full rounded-[2px] overflow-hidden border border-ink bg-papercard hover:border-grief focus:outline-none focus:ring-2 focus:ring-grief/50"
+
+                  aria-label={imageHint}
+
                 >
-                  <span aria-hidden>♥</span>
-                  <span aria-hidden>{votes}</span>
-                </button>
-                {/* Remove sits on the thumb (top-left), opposite the vote badge. */}
-                {canRemove && (
-                  <button
-                    type="button"
-                    className="absolute top-1.5 left-1.5 z-20 inline-flex h-7 w-7 items-center justify-center rounded-[2px] border-2 border-ink bg-papercard text-base font-black leading-none text-ink hover:bg-grief hover:text-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-grief/50"
-                    onClick={() => room.clearSource(source.id)}
-                    aria-label="Remove this screenshot"
-                    title="Remove"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              {/* Footer packs under the thumb — no mt-auto. Grid stretch (esp. vs the
-                  taller add-tile) used to dump empty space above SUBMITTED/SUGGESTED. */}
-              <div className="flex flex-col gap-1 px-0.5">
-                <div className="min-w-0 text-sm font-bold flex items-baseline gap-x-1.5 overflow-hidden">
-                  <span className="badge shrink-0">{isFiller ? 'Suggested' : 'Submitted'}</span>
-                  <span className="truncate">{isFiller ? (seedLabel ?? 'Story') : owner}</span>
-                  <span className="text-xs text-ink3 font-normal shrink-0 whitespace-nowrap">
-                    · {source.wordCount ? `~${source.wordCount} words` : 'Image only'}
+
+                  {selected && (
+
+                    <span className={`absolute top-1.5 z-10 stamp !px-2 !py-0.5 text-[10px] animate-stamp-in ${canRemove ? 'left-10' : 'left-1.5'}`}>
+
+                      Next story
+
+                    </span>
+
+                  )}
+
+                  {/* Mobile: cap height so Choose/Reroll stay in the tab viewport; md+ keeps full 3/4. */}
+                  <span className="relative block aspect-[3/4] w-full max-h-[min(32dvh,16rem)] md:max-h-none bg-paper">
+
+                    <img
+
+                      src={source.imageUrl}
+
+                      alt={isFiller ? (seedLabel ?? 'Suggested story') : `Preview image submitted by ${owner}`}
+
+                      className="absolute inset-0 h-full w-full object-contain pointer-events-none"
+
+                    />
+
                   </span>
+
+                  <span className="block text-xs py-0.5 text-ink2 font-semibold">{imageHint}</span>
+
+                </button>
+
+                <button
+
+                  type="button"
+
+                  className={`absolute top-2 right-2 z-20 inline-flex items-center justify-center gap-0.5 min-w-10 h-10 px-2 rounded-full border-2 border-ink text-base font-extrabold leading-none shadow-clip tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-grief/50 ${
+
+                    voted
+
+                      ? 'bg-grief text-paper'
+
+                      : 'bg-papercard text-grief hover:bg-grief/10'
+
+                  }`}
+
+                  onClick={(e) => {
+
+                    e.stopPropagation();
+
+                    room.voteForSource(voted ? null : source.id);
+
+                  }}
+
+                  aria-pressed={voted}
+
+                  aria-label={
+
+                    voted
+
+                      ? `Remove your vote, ${votes} ${votes === 1 ? 'vote' : 'votes'}`
+
+                      : `Vote for this story, ${votes} ${votes === 1 ? 'vote' : 'votes'}`
+
+                  }
+
+                  title={voted ? 'Remove vote' : 'Vote'}
+
+                >
+
+                  <span aria-hidden>♥</span>
+
+                  <span aria-hidden>{votes}</span>
+
+                </button>
+
+                {/* Mobile-only inspect — desktop uses click-on-image. */}
+
+                {coarsePointer && (
+
+                  <button
+
+                    type="button"
+
+                    className="absolute bottom-8 right-1.5 z-20 inline-flex h-7 px-1.5 items-center justify-center rounded-[2px] border-2 border-ink bg-papercard text-[10px] font-bold uppercase tracking-wide text-ink hover:bg-paper2 focus:outline-none focus-visible:ring-2 focus-visible:ring-grief/50"
+
+                    onClick={(e) => {
+
+                      e.stopPropagation();
+
+                      setPreview(source);
+
+                    }}
+
+                    aria-label="Inspect full size"
+
+                    title="Inspect"
+
+                  >
+
+                    View
+
+                  </button>
+
+                )}
+
+                {canRemove && (
+
+                  <button
+
+                    type="button"
+
+                    className="absolute top-1.5 left-1.5 z-20 inline-flex h-7 w-7 items-center justify-center rounded-[2px] border-2 border-ink bg-papercard text-base font-black leading-none text-ink hover:bg-grief hover:text-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-grief/50"
+
+                    onClick={() => room.clearSource(source.id)}
+
+                    aria-label="Remove this screenshot"
+
+                    title="Remove"
+
+                  >
+
+                    ×
+
+                  </button>
+
+                )}
+
+              </div>
+
+              <div className="flex flex-col gap-1 px-0.5">
+
+                <div className="min-w-0 text-sm font-bold flex items-baseline gap-x-1.5 overflow-hidden">
+
+                  <span className="badge shrink-0">{isFiller ? 'Suggested' : 'Submitted'}</span>
+
+                  <span className="truncate">{isFiller ? (seedLabel ?? 'Story') : owner}</span>
+
+                  <span className="text-xs text-ink3 font-normal shrink-0 whitespace-nowrap">
+
+                    · {source.wordCount ? `~${source.wordCount} words` : 'Image only'}
+
+                  </span>
+
                 </div>
-                {/* Host row: same slot on every card so seed/user footers match height. */}
+
                 {room.isHost && (
-                  <div className="flex flex-wrap items-center gap-1 min-h-8">
-                    {isVoteTie ? (
+
+                  <div className="flex flex-wrap items-center gap-1.5 min-h-9">
+
+                    {showChoose ? (
+
                       <button
+
                         type="button"
-                        className={`btn-ghost text-xs font-bold !px-2 !py-1 ${selected ? 'bg-grief/15 text-grief' : ''}`}
-                        onClick={() => room.selectSource(selected ? null : source.id)}
+
+                        className={`btn-secondary text-sm font-bold !px-3 !py-2 flex-1 min-w-[5.5rem] ${selected ? '!bg-grief !text-paper' : ''}`}
+
+                        disabled={chooseLocked && selected}
+
+                        onClick={() => chooseSource(source.id, selected)}
+
+                        title={chooseLocked ? 'Most voted — locked in' : undefined}
+
                       >
+
                         {selected ? '✓ Chosen' : 'Choose'}
+
                       </button>
-                    ) : selected ? (
-                      <span className="text-xs font-bold text-grief !px-2 !py-1">✓ Most voted</span>
+
                     ) : (
-                      <span className="invisible text-xs font-bold !px-2 !py-1" aria-hidden>
+
+                      <span className="invisible text-sm font-bold !px-3 !py-2 flex-1 min-w-[5.5rem]" aria-hidden>
+
                         Choose
+
                       </span>
+
                     )}
+
                     {isFiller ? (
                       <button
                         type="button"
-                        className="btn-ghost text-xs font-bold !px-2 !py-1"
+                        className="btn-secondary text-sm font-bold !px-3 !py-2 flex-1 min-w-[5.5rem]"
+                        disabled={uniqueWinnerId === source.id}
                         onClick={() => room.clearSource(source.id)}
-                        title="Swap this suggested story for a different one"
+                        title={
+                          uniqueWinnerId === source.id
+                            ? 'Most voted — can’t reroll'
+                            : 'Swap this suggested story for a different one'
+                        }
                       >
-                        Shuffle
+                        Reroll
                       </button>
                     ) : (
-                      <span className="invisible text-xs font-bold !px-2 !py-1" aria-hidden>
-                        Shuffle
+                      <span className="invisible text-sm font-bold !px-3 !py-2 flex-1 min-w-[5.5rem]" aria-hidden>
+                        Reroll
                       </span>
                     )}
                   </div>
+
                 )}
+
               </div>
+
             </div>
+
           );
+
         })}
+
+        </div>
+
         {children}
       </div>
+
       {preview && (
+
         <div className="fixed inset-0 z-50 bg-ink/70 p-4 grid place-items-center" role="dialog" aria-modal="true" aria-label="Filed image preview" onMouseDown={() => setPreview(null)}>
+
           <div className="card w-full max-w-5xl max-h-[92dvh] p-3 flex flex-col gap-2" onMouseDown={(event) => event.stopPropagation()}>
+
             <div className="flex items-center gap-2">
+
               <div className="kicker text-[10px]">Full image preview</div>
+
               <span className="text-xs text-ink3">Inspect before voting or choosing</span>
+
               <span className="flex-1" />
+
               <button type="button" className="btn-secondary text-sm !py-1.5" onClick={() => setPreview(null)}>Close</button>
+
             </div>
+
             <div className="min-h-0 overflow-auto bg-paper2 border-2 border-ink rounded-[2px]">
+
               <img src={preview.imageUrl} alt="Full-size filed source" className="block w-full h-auto" />
+
             </div>
+
           </div>
+
         </div>
+
       )}
+
     </div>
+
   );
+
 }
 
+
+
 function Spinner() {
+
   return (
+
     <span className="inline-block w-5 h-5 rounded-full border-2 border-ink/25 border-t-grief animate-spin" />
+
   );
+
 }
+

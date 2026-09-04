@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1120" viewBox="0 0 720 1120" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1120" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">AE</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Avery E. Ahmed</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Recruiter at Northline Transit Authority | Parent | Always learning</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">We banned pasting confidential client data</tspan><tspan x="36" dy="36">into public tools.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Tools change workflows. They do not replace</tspan><tspan x="36" dy="36">standards.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We label AI-assisted drafts so reviewers know</tspan><tspan x="36" dy="36">what to scrutinize.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Time saved on drafting moved into deeper</tspan><tspan x="36" dy="36">review, which is the point.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Appreciate the people who made this easier.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Train people on evaluation, not only on</tspan><tspan x="36" dy="36">prompting tricks.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The best results still need a human who knows</tspan><tspan x="36" dy="36">what good looks like.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The bottleneck shifts from typing to taste.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Junior folks still need mentorship more than</tspan><tspan x="36" dy="36">autocomplete.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Human judgment is still the product.</tspan></text>
+  <line x1="36" y1="1064" x2="684" y2="1064" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1098" fill="#00000099" font-size="18">♥ 571   💬 31</text>
+  <text x="684" y="1098" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

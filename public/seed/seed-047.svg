@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="400" viewBox="0 0 720 400" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="400" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">EA</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">Emma Ali-Ortiz</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@vikram.youssef</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26"><tspan x="36" dy="0">After three years on this team, I am taking</tspan><tspan x="36" dy="36">the next step. Celebrating publicly still</tspan><tspan x="36" dy="36">feels awkward, but hiding it helps no one. I</tspan><tspan x="36" dy="36">am inheriting a backlog that needs triage, not</tspan><tspan x="36" dy="36">heroics. The team needs steadiness more than a</tspan><tspan x="36" dy="36">new slogan. That is all</tspan></text>
+  <line x1="36" y1="344" x2="684" y2="344" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="378" fill="#536471" font-size="18">♥ 249   ↺ 9   💬 9</text>
+  <text x="684" y="378" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>

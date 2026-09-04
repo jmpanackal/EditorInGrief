@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { disposeOcr, runOcr, type OcrBox, type OcrWord } from '../lib/ocr';
 
 /**
@@ -19,7 +19,7 @@ import { disposeOcr, runOcr, type OcrBox, type OcrWord } from '../lib/ocr';
  *   user can pinch/wheel-zoom and pan without ever changing stored geometry.
  *   Default scale is fit-to-width (readable body text; tall images pan vertically),
  *   not contain-entire-image — see computeFit.
- * - Undo removes the LAST SHAPE; the Eraser tool removes a SPECIFIC shape the
+ * - Undo removes the LAST SHAPE; the Uncover tool removes a SPECIFIC shape the
  *   user taps (leaving later shapes intact); Reset clears all.
  * - Performance: committed shapes are baked onto an offscreen "base" canvas at
  *   natural resolution. During a drag we only blit that cache (through the view
@@ -50,6 +50,60 @@ type RGB = [number, number, number];
 function initialTool(): Tool {
   if (typeof window === 'undefined') return 'rect';
   return window.matchMedia('(max-width: 767px)').matches ? 'words' : 'rect';
+}
+
+/** Touch-primary devices — match SourceUpload / vote UI phrasing (hold vs click). */
+function useCoarsePointer(): boolean {
+  const [coarse, setCoarse] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(pointer: coarse)');
+    const update = () => setCoarse(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return coarse;
+}
+
+/** Shared hint beside tool modifiers — larger than the old muted 10px line. */
+function EditorToolTip({ children, title }: { children: ReactNode; title?: string }) {
+  return (
+    <span
+      title={title}
+      className="font-slab text-xs sm:text-sm font-semibold leading-snug text-ink shrink min-w-0 max-w-full line-clamp-2"
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Three-column modifiers row: equal side rails (`1fr`) keep the core controls
+ * visually centered; tips / secondary actions sit in the side rails so left and
+ * right feel balanced even when only one side has content.
+ */
+function ModifierRow({
+  left,
+  center,
+  right,
+}: {
+  left?: ReactNode;
+  center?: ReactNode;
+  right?: ReactNode;
+}) {
+  return (
+    <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-1.5 sm:gap-x-2">
+      <div className="justify-self-start self-center min-w-0 max-w-full flex items-center gap-1.5">
+        {left}
+      </div>
+      <div className="justify-self-center self-center flex items-center justify-center gap-1.5 shrink-0">
+        {center}
+      </div>
+      <div className="justify-self-end self-center min-w-0 max-w-full flex items-center justify-end gap-1.5">
+        {right}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -148,7 +202,7 @@ function distToSegment(p: Point, a: Point, b: Point): number {
   return Math.hypot(dx, dy);
 }
 
-/** Hit-test a shape against an image-space point (used by the eraser). */
+/** Hit-test a shape against an image-space point (used by Uncover). */
 function shapeHit(s: Shape, p: Point): boolean {
   if (s.type === 'rect') {
     const nx = Math.min(s.x, s.x + s.w);
@@ -165,6 +219,100 @@ function shapeHit(s: Shape, p: Point): boolean {
     if (distToSegment(p, pts[i - 1], pts[i]) <= tol) return true;
   }
   return false;
+}
+
+/** Topmost shape under a point (last drawn wins), or -1. */
+function topShapeIndexAt(shapes: Shape[], p: Point): number {
+  for (let i = shapes.length - 1; i >= 0; i--) {
+    if (shapeHit(shapes[i], p)) return i;
+  }
+  return -1;
+}
+
+/**
+ * Desktop Uncover feedforward: peek the original pixels under the hovered
+ * redaction so click intent is obvious before commit.
+ */
+let uncoverMaskCanvas: HTMLCanvasElement | null = null;
+function getUncoverMaskCanvas(w: number, h: number): HTMLCanvasElement {
+  if (!uncoverMaskCanvas) uncoverMaskCanvas = document.createElement('canvas');
+  if (uncoverMaskCanvas.width !== w || uncoverMaskCanvas.height !== h) {
+    uncoverMaskCanvas.width = w;
+    uncoverMaskCanvas.height = h;
+  }
+  return uncoverMaskCanvas;
+}
+
+function drawUncoverHoverPreview(
+  ctx: CanvasRenderingContext2D,
+  shape: Shape,
+  img: HTMLImageElement,
+  scale: number,
+): void {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  const dash = [6 / scale, 4 / scale];
+
+  if (shape.type === 'rect') {
+    const x = Math.min(shape.x, shape.x + shape.w);
+    const y = Math.min(shape.y, shape.y + shape.h);
+    const w = Math.abs(shape.w);
+    const h = Math.abs(shape.h);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    ctx.globalAlpha = 0.62;
+    ctx.drawImage(img, 0, 0, iw, ih);
+    ctx.restore();
+
+    ctx.save();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2.2 / scale;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash(dash);
+    ctx.lineWidth = 1.5 / scale;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+    return;
+  }
+
+  // Brush: mask the original to the stroke, then blit a translucent peek.
+  const pts = shape.points;
+  if (!pts.length) return;
+  const mask = getUncoverMaskCanvas(iw, ih);
+  const mctx = mask.getContext('2d');
+  if (mctx) {
+    mctx.setTransform(1, 0, 0, 1, 0, 0);
+    mctx.clearRect(0, 0, iw, ih);
+    mctx.lineCap = 'round';
+    mctx.lineJoin = 'round';
+    mctx.strokeStyle = '#ffffff';
+    mctx.fillStyle = '#ffffff';
+    mctx.lineWidth = shape.thickness;
+    strokePath(mctx, pts, shape.thickness / 2);
+    mctx.globalCompositeOperation = 'source-in';
+    mctx.drawImage(img, 0, 0, iw, ih);
+    mctx.globalCompositeOperation = 'source-over';
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    ctx.drawImage(mask, 0, 0);
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.setLineDash(dash);
+  ctx.lineWidth = Math.max(1.4 / scale, shape.thickness * 0.1);
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+  strokePath(ctx, pts, shape.thickness / 2);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.lineWidth = Math.max(1 / scale, shape.thickness * 0.07);
+  strokePath(ctx, pts, shape.thickness / 2);
+  ctx.restore();
 }
 
 /** Area of an OCR box (image px²) — used to pick the tightest box under a tap. */
@@ -397,6 +545,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
 
   const [tool, setTool] = useState<Tool>(initialTool);
   const toolRef = useRef<Tool>(tool);
+  const coarsePointer = useCoarsePointer();
   const [thickness, setThickness] = useState(28);
   const thicknessRef = useRef(28);
   const [shapeCount, setShapeCount] = useState(0);
@@ -405,6 +554,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
   const [helpOpen, setHelpOpen] = useState(false);
   const helpWrapRef = useRef<HTMLDivElement | null>(null);
   const brushHoverRef = useRef<Point | null>(null);
+  /** Index into shapesRef for Uncover desktop hover peek; -1 = none. */
+  const uncoverHoverIdxRef = useRef(-1);
 
   // Dismiss help when tapping/clicking outside the ⓘ control + popover.
   useEffect(() => {
@@ -533,9 +684,9 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
   }, []);
 
   /**
-   * Keep the image on-stage. Document-style: top-align when the scaled image
-   * is shorter than the viewport (avoid floating mid-canvas gutters after
-   * fit-to-width); center horizontally only when letterboxed on the sides.
+   * Keep the image on-stage. When the scaled image is smaller than the viewport
+   * on an axis, center it (letterbox gutters); when taller/wider, clamp pan so
+   * the image always covers that axis.
    */
   const clampView = useCallback(() => {
     const c = displayRef.current;
@@ -546,8 +697,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
     const sw = (img.naturalWidth || 1) * scale;
     const sh = (img.naturalHeight || 1) * scale;
     v.ox = sw <= c.width ? (c.width - sw) / 2 : Math.min(0, Math.max(c.width - sw, v.ox));
-    // Top-align when there's spare vertical room; otherwise clamp pan range.
-    v.oy = sh <= c.height ? 0 : Math.min(0, Math.max(c.height - sh, v.oy));
+    // Center when there's spare vertical room; otherwise clamp pan range.
+    v.oy = sh <= c.height ? (c.height - sh) / 2 : Math.min(0, Math.max(c.height - sh, v.oy));
   }, []);
 
   const renderDisplay = useCallback(() => {
@@ -579,6 +730,12 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
     // Display-only Marker cursor ring — never written to the editing canvas.
     if (toolRef.current === 'brush' && brushHoverRef.current && !drawingRef.current) {
       drawBrushHover(ctx, brushHoverRef.current, thicknessRef.current, scale);
+    }
+    // Desktop Uncover: peek original under the hovered redaction.
+    if (toolRef.current === 'eraser' && uncoverHoverIdxRef.current >= 0) {
+      const hoverShape = shapesRef.current[uncoverHoverIdxRef.current];
+      const img = imgRef.current;
+      if (hoverShape && img) drawUncoverHoverPreview(ctx, hoverShape, img, scale);
     }
   }, [drawShape]);
 
@@ -655,8 +812,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
           }
         } catch { /* ignore corrupt entry */ }
       }
-      // New source → default readable view (fit-width at 100%), top-left origin
-      // before clamp recenters horizontally if the image is narrower than the stage.
+      // New source → default readable view (fit-width at 100%); clamp centers
+      // on any axis where the scaled image is smaller than the stage.
       viewRef.current.zoom = 1;
       viewRef.current.ox = 0;
       viewRef.current.oy = 0;
@@ -746,7 +903,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
     applyZoomAt(c.width / 2, c.height / 2, factor);
   }, [applyZoomAt]);
 
-  /** Return to the default readable view (fit-width at 100%, top-aligned). */
+  /** Return to the default readable view (fit-width at 100%, centered if letterboxed). */
   const resetView = useCallback(() => {
     const v = viewRef.current;
     v.zoom = 1;
@@ -847,6 +1004,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
       if (shapeHit(shapes[i], p)) {
         shapesRef.current = [...shapes.slice(0, i), ...shapes.slice(i + 1)];
         setShapeCount(shapesRef.current.length);
+        uncoverHoverIdxRef.current = -1;
         rebuildBase();
         renderDisplay();
         persist();
@@ -894,6 +1052,19 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
     const draft = draftRef.current;
     drawingRef.current = false;
     if (!draft) return;
+    // Tap (no drag) on Box: place a default-sized rect centered on the tap —
+    // mobile users often expect tap-to-place rather than drag-to-draw.
+    if (draft.type === 'rect' && Math.abs(draft.w) < 2 && Math.abs(draft.h) < 2) {
+      const img = imgRef.current;
+      const iw = img?.naturalWidth || 720;
+      const ih = img?.naturalHeight || 480;
+      const bw = Math.max(48, Math.round(iw * 0.16));
+      const bh = Math.max(28, Math.round(ih * 0.055));
+      draft.x = Math.max(0, Math.min(iw - bw, draft.x - bw / 2));
+      draft.y = Math.max(0, Math.min(ih - bh, draft.y - bh / 2));
+      draft.w = bw;
+      draft.h = bh;
+    }
     const isEmptyRect = draft.type === 'rect' && Math.abs(draft.w) < 2 && Math.abs(draft.h) < 2;
     draftRef.current = null;
     if (isEmptyRect) { renderDisplay(); return; }
@@ -978,14 +1149,20 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
     })();
   }, [ensureOcr, ocrState]);
 
-  // Kick off OCR the first time the Tap-words tool is selected for this image.
+  // Kick off OCR when Tap-text is selected OR when the image finishes loading
+  // while Tap-text is already the default (mobile). Without the `loaded`
+  // dependency, the first effect run sees no img and never retries.
   useEffect(() => {
-    if (tool === 'words') void ensureOcr();
-  }, [tool, ensureOcr]);
+    if (tool === 'words' && loaded) void ensureOcr();
+  }, [tool, loaded, ensureOcr]);
 
   // Redraw the canvas overlays when the tool or granularity changes (so the
   // underline affordances appear/disappear and switch word<->letter promptly).
-  useEffect(() => { renderDisplay(); }, [tool, granularity, renderDisplay]);
+  // Redraw when tool/granularity changes; clear Uncover hover when leaving that tool.
+  useEffect(() => {
+    if (tool !== 'eraser') uncoverHoverIdxRef.current = -1;
+    renderDisplay();
+  }, [tool, granularity, renderDisplay]);
 
   /** Boxes to tap/drag against, per current granularity (word vs letter). */
   const collectBoxes = useCallback((): KeyedBox[] => {
@@ -1149,12 +1326,28 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
   }, [loaded, cancelDraft, startPinch, eraseAt, toImage, atLimitRef, beginDraw, beginWordSelect]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (toolRef.current === 'brush' && interactiveRef.current && e.pointerType !== 'touch' && !drawingRef.current) {
+    // Desktop tool feedforward (skip touch — no persistent hover).
+    if (interactiveRef.current && e.pointerType !== 'touch' && !drawingRef.current) {
       const point = toImage(e.clientX, e.clientY, false);
       const img = imgRef.current;
       const inImage = !!img && point.x >= 0 && point.y >= 0 && point.x <= img.naturalWidth && point.y <= img.naturalHeight;
-      brushHoverRef.current = inImage ? point : null;
-      renderDisplay();
+
+      if (toolRef.current === 'brush') {
+        brushHoverRef.current = inImage ? point : null;
+        if (uncoverHoverIdxRef.current !== -1) uncoverHoverIdxRef.current = -1;
+        renderDisplay();
+      } else if (toolRef.current === 'eraser') {
+        brushHoverRef.current = null;
+        const next = inImage ? topShapeIndexAt(shapesRef.current, point) : -1;
+        if (next !== uncoverHoverIdxRef.current) {
+          uncoverHoverIdxRef.current = next;
+          renderDisplay();
+        }
+      } else if (brushHoverRef.current || uncoverHoverIdxRef.current !== -1) {
+        brushHoverRef.current = null;
+        uncoverHoverIdxRef.current = -1;
+        renderDisplay();
+      }
     }
     if (!pointersRef.current.has(e.pointerId)) return;
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1168,9 +1361,12 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
     }
   }, [doPinch, doPan, moveWordSelect, moveDraw, toImage, renderDisplay]);
 
-  const clearBrushHover = useCallback(() => {
-    if (!brushHoverRef.current) return;
+  const clearToolHover = useCallback(() => {
+    const hadBrush = !!brushHoverRef.current;
+    const hadUncover = uncoverHoverIdxRef.current !== -1;
+    if (!hadBrush && !hadUncover) return;
     brushHoverRef.current = null;
+    uncoverHoverIdxRef.current = -1;
     renderDisplay();
   }, [renderDisplay]);
 
@@ -1330,13 +1526,13 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
         return;
       }
 
-      // Tool switch: 1–4 or B / M / T / E
+      // Tool switch: 1–4 or B / M / T / U (R/E/L still map to Uncover)
       const toolKey = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const toolMap: Record<string, Tool> = {
         '1': 'rect', b: 'rect',
         '2': 'brush', m: 'brush',
         '3': 'words', t: 'words',
-        '4': 'eraser', e: 'eraser',
+        '4': 'eraser', u: 'eraser', r: 'eraser', e: 'eraser', l: 'eraser',
       };
       if (!mod && !e.altKey && toolMap[toolKey]) {
         e.preventDefault();
@@ -1373,27 +1569,45 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
         ? 'cell'
         : 'crosshair';
 
-  const wordsStatus =
-    ocrState === 'loading' ? '🔎 Detecting text…'
-    : ocrState === 'ready' ? `${ocrWordsRef.current.length} words · tap to toggle, drag to hide`
-    : ocrState === 'empty' ? 'No text found — retry or use Box / Brush'
-    : ocrState === 'error' ? 'Reader paused — retry or use Box / Brush'
+  const wordsTipLeft =
+    ocrState === 'loading' ? 'Detecting…'
+    : ocrState === 'ready'
+      ? (granularity === 'letter'
+        ? 'Tap letters to redact them'
+        : 'Tap words to redact them')
+    : ocrState === 'empty' ? 'No text — try Box'
+    : ocrState === 'error' ? 'Failed — retry'
     : '';
+
+  const wordsTipRight =
+    ocrState === 'ready' ? 'Drag to redact multiple' : '';
+
+  const boxTip = coarsePointer
+    ? 'Hold and drag to draw a box'
+    : 'Click and drag to draw a box';
+
+  const markerTip = 'Drag to scribble over text';
+
+  const uncoverTip = coarsePointer
+    ? 'Tap a redaction to uncover it'
+    : 'Hover to peek, click to uncover';
 
   const controlsHint =
     'Default view fits the image to the viewport width (100%) for readable text — pan vertically on tall screenshots.\n' +
-    'Zoom: scroll wheel or pinch (Reset returns to fit-width, top-aligned)\n' +
+    'Zoom: scroll wheel or pinch (Reset returns to fit-width; short images stay centered)\n' +
     'Pan: Space + drag, middle-drag, or two-finger drag\n' +
     'Straight lines / squares: hold Shift (or the Straight toggle)\n' +
-    'Tap-text: tap a word to hide/reveal, drag across to hide a range\n' +
-    'Shortcuts — Ctrl/Cmd+Z undo · 1/B Box · 2/M Marker · 3/T Tap text · 4/E Eraser\n' +
+    'Box: drag to draw, or tap to place a box\n' +
+    'Tap text: tap a word to hide/reveal, drag across to hide a range\n' +
+    'Uncover: click a redaction to bring that part back (hover peeks it on desktop)\n' +
+    'Shortcuts — Ctrl/Cmd+Z undo · 1/B Box · 2/M Marker · 3/T Tap text · 4/U Uncover\n' +
     '[ ] or −/+ Marker thickness · Ctrl/Cmd+Enter (or Enter) Ready/Unready · Esc cancel draw';
 
   const tools: { id: Tool; icon: string; label: string }[] = [
     { id: 'rect', icon: '▭', label: 'Box' },
     { id: 'brush', icon: '✎', label: 'Marker' },
-    { id: 'words', icon: 'abc', label: 'Tap text' },
-    { id: 'eraser', icon: '⌫', label: 'Eraser' },
+    { id: 'words', icon: 'abc', label: 'Text' },
+    { id: 'eraser', icon: '👁', label: 'Uncover' },
   ];
 
   const renderTools = () =>
@@ -1425,76 +1639,95 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
     </>
   );
 
-  /** Tool modifiers centered under the canvas (Gartic-style sub-controls). */
+  const wordsGranularityToggle = (
+    <div className="flex rounded-[3px] overflow-hidden border-2 border-ink text-xs shrink-0">
+      <button
+        type="button"
+        onClick={() => setGranularity('word')}
+        disabled={!interactive}
+        className={`px-2.5 sm:px-3 py-2 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 ${
+          granularity === 'word' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'
+        }`}
+      >
+        Words
+      </button>
+      <button
+        type="button"
+        onClick={() => setGranularity('letter')}
+        disabled={!interactive}
+        className={`px-2.5 sm:px-3 py-2 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 border-l-2 border-ink ${
+          granularity === 'letter' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'
+        }`}
+      >
+        Letters
+      </button>
+    </div>
+  );
+
+  const brushThicknessPicker = (
+    <div className="flex items-center gap-0.5 sm:gap-1 rounded-[3px] border-2 border-ink bg-papercard px-1 py-0.5 shrink-0">
+      {THICKNESS_PRESETS.map((t) => {
+        const active = thickness === t;
+        const dot = Math.max(6, Math.min(18, t * 0.28));
+        return (
+          <button
+            key={t}
+            type="button"
+            disabled={!interactive}
+            onClick={() => setThickness(t)}
+            aria-label={`Brush size ${t}`}
+            aria-pressed={active}
+            className={`w-8 h-8 sm:w-9 sm:h-9 grid place-items-center rounded-full border-2 border-ink transition disabled:opacity-40 ${
+              active ? 'bg-grief' : 'bg-papercard hover:bg-paper2'
+            }`}
+          >
+            <span
+              className={`rounded-full ${active ? 'bg-paper' : 'bg-ink'}`}
+              style={{ width: dot, height: dot }}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  /** Tool modifiers (Gartic-style sub-controls) — centered core, balanced side rails. */
   const bottomModifiers = (
     <>
       {tool === 'rect' && (
-        <ConstrainButton label="Square" constrain={constrain} interactive={interactive} onClick={() => setConstrain((c) => !c)} />
+        <ModifierRow
+          left={<EditorToolTip>{boxTip}</EditorToolTip>}
+          center={
+            <ConstrainButton label="Square" constrain={constrain} interactive={interactive} onClick={() => setConstrain((c) => !c)} />
+          }
+        />
       )}
       {tool === 'brush' && (
-        <>
-          <div className="flex items-center gap-0.5 sm:gap-1 rounded-[3px] border-2 border-ink bg-papercard px-1 py-0.5 shrink-0">
-            {THICKNESS_PRESETS.map((t) => {
-              const active = thickness === t;
-              const dot = Math.max(6, Math.min(18, t * 0.28));
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  disabled={!interactive}
-                  onClick={() => setThickness(t)}
-                  aria-label={`Brush size ${t}`}
-                  aria-pressed={active}
-                  className={`w-8 h-8 sm:w-9 sm:h-9 grid place-items-center rounded-full border-2 border-ink transition disabled:opacity-40 ${
-                    active ? 'bg-grief' : 'bg-papercard hover:bg-paper2'
-                  }`}
-                >
-                  <span
-                    className={`rounded-full ${active ? 'bg-paper' : 'bg-ink'}`}
-                    style={{ width: dot, height: dot }}
-                  />
-                </button>
-              );
-            })}
-          </div>
-          <ConstrainButton label="Straight" constrain={constrain} interactive={interactive} onClick={() => setConstrain((c) => !c)} />
-        </>
+        <ModifierRow
+          left={<EditorToolTip>{markerTip}</EditorToolTip>}
+          center={brushThicknessPicker}
+          right={
+            <ConstrainButton label="Straight" constrain={constrain} interactive={interactive} onClick={() => setConstrain((c) => !c)} />
+          }
+        />
       )}
       {tool === 'words' && (
-        <>
-          <div className="flex rounded-[3px] overflow-hidden border-2 border-ink text-xs shrink-0">
-            <button
-              type="button"
-              onClick={() => setGranularity('word')}
-              disabled={!interactive}
-              className={`px-2.5 sm:px-3 py-2 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 ${
-                granularity === 'word' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'
-              }`}
-            >
-              Words
-            </button>
-            <button
-              type="button"
-              onClick={() => setGranularity('letter')}
-              disabled={!interactive}
-              className={`px-2.5 sm:px-3 py-2 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 border-l-2 border-ink ${
-                granularity === 'letter' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'
-              }`}
-            >
-              Letters
-            </button>
-          </div>
-          {wordsStatus && (
-            <span className="hidden lg:inline font-slab text-xs font-bold leading-snug text-ink max-w-[14rem] truncate" title={wordsStatus}>
-              {wordsStatus}
-            </span>
-          )}
-          {(ocrState === 'error' || ocrState === 'empty') && (
-            <button type="button" onClick={retryOcr} disabled={!interactive} className="btn-secondary !px-2 !py-1.5 !text-xs shrink-0">
-              ↻ Retry
-            </button>
-          )}
-        </>
+        <ModifierRow
+          left={wordsTipLeft ? <EditorToolTip title={wordsTipLeft}>{wordsTipLeft}</EditorToolTip> : undefined}
+          center={wordsGranularityToggle}
+          right={
+            (ocrState === 'error' || ocrState === 'empty') ? (
+              <button type="button" onClick={retryOcr} disabled={!interactive} className="btn-secondary !px-2 !py-1.5 !text-xs shrink-0">
+                ↻ Retry
+              </button>
+            ) : wordsTipRight ? (
+              <EditorToolTip title={wordsTipRight}>{wordsTipRight}</EditorToolTip>
+            ) : undefined
+          }
+        />
+      )}
+      {tool === 'eraser' && (
+        <ModifierRow center={<EditorToolTip>{uncoverTip}</EditorToolTip>} />
       )}
     </>
   );
@@ -1524,8 +1757,25 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
 
   return (
     <div className="flex flex-col h-full min-h-0 gap-1.5 sm:gap-2">
-      {/* Desktop: compact square tool palette · dominant canvas
-          Mobile: canvas on top, tool strip below */}
+      {/* Mobile: tools + modifiers ABOVE the image so controls are found first.
+          Desktop: left palette beside canvas (unchanged). */}
+      <div className="md:hidden shrink-0 flex flex-col gap-1.5">
+        <div className="flex items-stretch gap-1.5">
+          <div className="grid grid-cols-6 flex-1 min-w-0 gap-1">
+            {renderTools()}
+            {undoResetTools}
+          </div>
+          {remaining != null && (
+            <span className={`shrink-0 px-2 inline-flex items-center rounded-[3px] border-2 border-ink font-slab font-bold uppercase tracking-wide text-[10px] ${limitTone}`}>
+              {remaining} left
+            </span>
+          )}
+        </div>
+        <div className="w-full min-w-0">
+          {bottomModifiers}
+        </div>
+      </div>
+
       <div className="flex flex-1 min-h-0 gap-2 sm:gap-2.5">
         {/* Left palette (md+) — Gartic 2-col square grid, vertically centered beside stage */}
         <aside className="hidden md:flex flex-col justify-center gap-2 shrink-0 w-[8.75rem] lg:w-[9.75rem] self-stretch">
@@ -1550,7 +1800,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
             ref={displayRef}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
-            onPointerLeave={clearBrushHover}
+            onPointerLeave={clearToolHover}
             onPointerUp={endPointer}
             onPointerCancel={endPointer}
             className="block w-full h-full"
@@ -1587,27 +1837,12 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
         </div>
       </div>
 
-      {/* Mobile: primary tools + undo/reset always visible */}
-      <div className="md:hidden shrink-0 flex items-stretch gap-1.5">
-        <div className="grid grid-cols-6 flex-1 min-w-0 gap-1">
-          {renderTools()}
-          {undoResetTools}
-        </div>
-        {remaining != null && (
-          <span className={`shrink-0 px-2 inline-flex items-center rounded-[3px] border-2 border-ink font-slab font-bold uppercase tracking-wide text-[10px] ${limitTone}`}>
-            {remaining} left
-          </span>
-        )}
-      </div>
-
-      {/* Bottom bar — sub-controls + zoom centered under canvas; Ready bottom-right */}
+      {/* Bottom bar — desktop modifiers under canvas; mobile: zoom + Ready only */}
       <div className="shrink-0 grid grid-cols-[1fr_auto] md:grid-cols-[8.75rem_1fr_auto] lg:grid-cols-[9.75rem_1fr_auto] items-center gap-x-2 sm:gap-x-2.5 gap-y-1.5 min-h-[2.75rem] pt-0.5 min-w-0">
-        {/* Spacer matching desktop palette width so center cluster sits under the stage */}
         <div className="hidden md:block" aria-hidden="true" />
 
-        <div className="flex items-center justify-center gap-1.5 sm:gap-2 min-w-0 col-span-1 md:col-span-1">
-          {/* Only tool modifiers scroll; zoom/help stay unclipped so the popover can open upward. */}
-          <div className="flex items-center justify-end gap-1.5 sm:gap-2 min-w-0 overflow-x-auto themed-scroll">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 w-full col-span-1 md:col-span-1">
+          <div className="hidden md:block flex-1 min-w-0">
             {bottomModifiers}
           </div>
           {zoomControl}

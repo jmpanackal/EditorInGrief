@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="940" viewBox="0 0 720 940" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="940" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">KA</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Kwame Araujo</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Financial Analyst | Peak Packaging</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">Money talk with my partner used to be tense.</tspan><tspan x="36" dy="36">Practice helped.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I moved payday transfers to happen</tspan><tspan x="36" dy="36">automatically before I could "decide later."</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">- Say the constraint out loud early.</tspan><tspan x="36" dy="36">- Automate the boring transfers.</tspan><tspan x="36" dy="36">- Protect one block of uninterrupted time.</tspan><tspan x="36" dy="36">- Check who is missing before you decide.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">A small system you follow beats a perfect</tspan><tspan x="36" dy="36">spreadsheet you abandon.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">What would you have done?</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Talking about money with your partner is a</tspan><tspan x="36" dy="36">skill, not a vibe.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We separated rent, groceries, and annual bills</tspan><tspan x="36" dy="36">into different buckets.</tspan></text>
+  <line x1="36" y1="884" x2="684" y2="884" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="918" fill="#00000099" font-size="18">♥ 529   💬 49</text>
+  <text x="684" y="918" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

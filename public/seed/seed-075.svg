@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1084" viewBox="0 0 720 1084" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1084" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">SK</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">Sora Kamau</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@stella.miller</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26"><tspan x="36" dy="0">I am learning how to be a beginner again on</tspan><tspan x="36" dy="36">purpose.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Someone wrote, "Can we move the deadline?"</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I answered with the messy truth. I take messy</tspan><tspan x="36" dy="36">notes and rewrite one clean page within 24</tspan><tspan x="36" dy="36">hours.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Ask the basic questions early.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Protect sleep even during exam weeks. Memory</tspan><tspan x="36" dy="36">needs it.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The cohort chat has been as valuable as the</tspan><tspan x="36" dy="36">lectures.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Being a beginner again is a professional</tspan><tspan x="36" dy="36">skill.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The cohort chat has been as valuable as the</tspan><tspan x="36" dy="36">lectures.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Teach back what you learn or you did not</tspan><tspan x="36" dy="36">really learn it.</tspan></text>
+  <line x1="36" y1="1028" x2="684" y2="1028" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1062" fill="#536471" font-size="18">♥ 500   ↺ 20   💬 20</text>
+  <text x="684" y="1062" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>

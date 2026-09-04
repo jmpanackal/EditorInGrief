@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1012" viewBox="0 0 720 1012" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1012" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1877f2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">TI</text>
+  <text x="108" y="42" fill="#050505" font-size="24" font-weight="700">Taylor Ibrahim</text>
+  <text x="108" y="72" fill="#65676b" font-size="18">Just now · 🌎 Public</text>
+  <text x="36" y="146" fill="#050505" font-size="26"><tspan x="36" dy="0">One student finally had the breakthrough after</tspan><tspan x="36" dy="36">weeks of quiet work.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Someone wrote, "Is this urgent or just loud?"</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I answered with the messy truth. I planned</tspan><tspan x="36" dy="36">transitions as carefully as the content</tspan><tspan x="36" dy="36">blocks.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Curiosity is contagious when adults model it.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Filing this under things I want to remember.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Relationships unlock learning more than new</tspan><tspan x="36" dy="36">tech does.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Grading late at night is a choice I am trying</tspan><tspan x="36" dy="36">to make less often.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Specific praise builds the culture you want.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Classroom management is relationship work</tspan><tspan x="36" dy="36">wearing a schedule.</tspan></text>
+  <line x1="36" y1="956" x2="684" y2="956" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="990" fill="#65676b" font-size="18">Like · Comment · Share</text>
+  <text x="684" y="990" fill="#1877f2" font-size="16" font-weight="600" text-anchor="end">FACEBOOK</text>
+</svg>

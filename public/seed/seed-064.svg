@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1048" viewBox="0 0 720 1048" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1048" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">MT</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Mei Tanaka</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Girlboss | High School Teacher at Frontier Insurance Co.</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">Nights and weekends are not infinite. I had to</tspan><tspan x="36" dy="36">cut something else.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The part dashboards miss is the human</tspan><tspan x="36" dy="36">friction. I explain new concepts out loud to</tspan><tspan x="36" dy="36">an empty room. It works.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Schedule the study block before motivation</tspan><tspan x="36" dy="36">arrives.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Adult learning works when life logistics are</tspan><tspan x="36" dy="36">respected.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I turned off notifications during the two-hour</tspan><tspan x="36" dy="36">study block.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Choose programs for the problems you want to</tspan><tspan x="36" dy="36">solve, not the brand alone.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Flashcards on the commute replaced</tspan><tspan x="36" dy="36">doomscrolling for a month.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Credentials open doors. Curiosity keeps you in</tspan><tspan x="36" dy="36">the room.</tspan></text>
+  <line x1="36" y1="992" x2="684" y2="992" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1026" fill="#00000099" font-size="18">♥ 542   💬 2</text>
+  <text x="684" y="1026" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

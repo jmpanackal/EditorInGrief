@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1012" viewBox="0 0 720 1012" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1012" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">DW</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">David Wagner</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Real Estate Agent | Open to connect</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">We tracked which SKUs sit and which ones turn.</tspan><tspan x="36" dy="36">Ego products lost.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The part dashboards miss is the human</tspan><tspan x="36" dy="36">friction. We trained the team on one upsell</tspan><tspan x="36" dy="36">that feels helpful, not pushy.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Your calendar should include recovery, not</tspan><tspan x="36" dy="36">only openings.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">That is the update for now.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Ask for the review. Most happy people just</tspan><tspan x="36" dy="36">forget.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I started closing the laptop at 8 so I still</tspan><tspan x="36" dy="36">have a life outside the business.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Systems let you be kind to customers without</tspan><tspan x="36" dy="36">burning out staff.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We tracked which SKUs sit and which ones turn.</tspan><tspan x="36" dy="36">Ego products lost.</tspan></text>
+  <line x1="36" y1="956" x2="684" y2="956" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="990" fill="#00000099" font-size="18">♥ 532   💬 52</text>
+  <text x="684" y="990" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

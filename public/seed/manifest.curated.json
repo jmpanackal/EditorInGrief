@@ -1,0 +1,408 @@
+[
+  {
+    "id": "curated-001",
+    "imageUrl": "/seed/curated/curated-001.png",
+    "wordCount": 89,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-002",
+    "imageUrl": "/seed/curated/curated-002.png",
+    "wordCount": 113,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-003",
+    "imageUrl": "/seed/curated/curated-003.png",
+    "wordCount": 85,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-004",
+    "imageUrl": "/seed/curated/curated-004.png",
+    "wordCount": 106,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-005",
+    "imageUrl": "/seed/curated/curated-005.png",
+    "wordCount": 56,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-006",
+    "imageUrl": "/seed/curated/curated-006.png",
+    "wordCount": 18,
+    "label": "LinkedIn · post",
+    "bucket": "short"
+  },
+  {
+    "id": "curated-007",
+    "imageUrl": "/seed/curated/curated-007.png",
+    "wordCount": 121,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-008",
+    "imageUrl": "/seed/curated/curated-008.png",
+    "wordCount": 92,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-009",
+    "imageUrl": "/seed/curated/curated-009.png",
+    "wordCount": 134,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-010",
+    "imageUrl": "/seed/curated/curated-010.png",
+    "wordCount": 75,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-011",
+    "imageUrl": "/seed/curated/curated-011.png",
+    "wordCount": 51,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-012",
+    "imageUrl": "/seed/curated/curated-012.png",
+    "wordCount": 99,
+    "label": "LinkedIn · post + reply",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-013",
+    "imageUrl": "/seed/curated/curated-013.png",
+    "wordCount": 60,
+    "label": "LinkedIn · post + reply",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-014",
+    "imageUrl": "/seed/curated/curated-014.png",
+    "wordCount": 85,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-015",
+    "imageUrl": "/seed/curated/curated-015.png",
+    "wordCount": 44,
+    "label": "LinkedIn · post",
+    "bucket": "short"
+  },
+  {
+    "id": "curated-016",
+    "imageUrl": "/seed/curated/curated-016.png",
+    "wordCount": 134,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-017",
+    "imageUrl": "/seed/curated/curated-017.png",
+    "wordCount": 88,
+    "label": "LinkedIn · post + reply",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-018",
+    "imageUrl": "/seed/curated/curated-018.png",
+    "wordCount": 93,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-019",
+    "imageUrl": "/seed/curated/curated-019.png",
+    "wordCount": 97,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-020",
+    "imageUrl": "/seed/curated/curated-020.png",
+    "wordCount": 122,
+    "label": "LinkedIn · post + reply",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-021",
+    "imageUrl": "/seed/curated/curated-021.png",
+    "wordCount": 40,
+    "label": "LinkedIn · post",
+    "bucket": "short"
+  },
+  {
+    "id": "curated-022",
+    "imageUrl": "/seed/curated/curated-022.png",
+    "wordCount": 18,
+    "label": "LinkedIn · post",
+    "bucket": "short"
+  },
+  {
+    "id": "curated-023",
+    "imageUrl": "/seed/curated/curated-023.png",
+    "wordCount": 73,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-024",
+    "imageUrl": "/seed/curated/curated-024.png",
+    "wordCount": 104,
+    "label": "LinkedIn · post + replies",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-025",
+    "imageUrl": "/seed/curated/curated-025.png",
+    "wordCount": 112,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-026",
+    "imageUrl": "/seed/curated/curated-026.png",
+    "wordCount": 261,
+    "label": "LinkedIn · post",
+    "bucket": "long"
+  },
+  {
+    "id": "curated-027",
+    "imageUrl": "/seed/curated/curated-027.png",
+    "wordCount": 105,
+    "label": "LinkedIn · post + reply",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-028",
+    "imageUrl": "/seed/curated/curated-028.png",
+    "wordCount": 65,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-029",
+    "imageUrl": "/seed/curated/curated-029.png",
+    "wordCount": 90,
+    "label": "YouTube · comment thread",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-030",
+    "imageUrl": "/seed/curated/curated-030.png",
+    "wordCount": 119,
+    "label": "YouTube · comment + reply",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-031",
+    "imageUrl": "/seed/curated/curated-031.png",
+    "wordCount": 49,
+    "label": "YouTube · comment + reply",
+    "bucket": "short"
+  },
+  {
+    "id": "curated-032",
+    "imageUrl": "/seed/curated/curated-032.png",
+    "wordCount": 40,
+    "label": "LinkedIn · post",
+    "bucket": "short"
+  },
+  {
+    "id": "curated-033",
+    "imageUrl": "/seed/curated/curated-033.png",
+    "wordCount": 85,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-034",
+    "imageUrl": "/seed/curated/curated-034.png",
+    "wordCount": 90,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-035",
+    "imageUrl": "/seed/curated/curated-035.png",
+    "wordCount": 33,
+    "label": "LinkedIn · post",
+    "bucket": "short"
+  },
+  {
+    "id": "curated-036",
+    "imageUrl": "/seed/curated/curated-036.png",
+    "wordCount": 74,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-037",
+    "imageUrl": "/seed/curated/curated-037.png",
+    "wordCount": 51,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-038",
+    "imageUrl": "/seed/curated/curated-038.png",
+    "wordCount": 32,
+    "label": "LinkedIn · post",
+    "bucket": "short"
+  },
+  {
+    "id": "curated-039",
+    "imageUrl": "/seed/curated/curated-039.png",
+    "wordCount": 109,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-040",
+    "imageUrl": "/seed/curated/curated-040.png",
+    "wordCount": 30,
+    "label": "LinkedIn · post",
+    "bucket": "short"
+  },
+  {
+    "id": "curated-041",
+    "imageUrl": "/seed/curated/curated-041.png",
+    "wordCount": 121,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-042",
+    "imageUrl": "/seed/curated/curated-042.png",
+    "wordCount": 52,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-043",
+    "imageUrl": "/seed/curated/curated-043.png",
+    "wordCount": 93,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-044",
+    "imageUrl": "/seed/curated/curated-044.png",
+    "wordCount": 27,
+    "label": "News · article",
+    "bucket": "short"
+  },
+  {
+    "id": "curated-045",
+    "imageUrl": "/seed/curated/curated-045.png",
+    "wordCount": 109,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-046",
+    "imageUrl": "/seed/curated/curated-046.png",
+    "wordCount": 98,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-047",
+    "imageUrl": "/seed/curated/curated-047.png",
+    "wordCount": 117,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-048",
+    "imageUrl": "/seed/curated/curated-048.png",
+    "wordCount": 35,
+    "label": "LinkedIn · post",
+    "bucket": "short"
+  },
+  {
+    "id": "curated-049",
+    "imageUrl": "/seed/curated/curated-049.png",
+    "wordCount": 77,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-050",
+    "imageUrl": "/seed/curated/curated-050.png",
+    "wordCount": 137,
+    "label": "LinkedIn · profile",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-051",
+    "imageUrl": "/seed/curated/curated-051.png",
+    "wordCount": 103,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-052",
+    "imageUrl": "/seed/curated/curated-052.png",
+    "wordCount": 122,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-053",
+    "imageUrl": "/seed/curated/curated-053.png",
+    "wordCount": 226,
+    "label": "LinkedIn · post",
+    "bucket": "long"
+  },
+  {
+    "id": "curated-054",
+    "imageUrl": "/seed/curated/curated-054.png",
+    "wordCount": 153,
+    "label": "LinkedIn · post",
+    "bucket": "long"
+  },
+  {
+    "id": "curated-055",
+    "imageUrl": "/seed/curated/curated-055.png",
+    "wordCount": 157,
+    "label": "LinkedIn · post",
+    "bucket": "long"
+  },
+  {
+    "id": "curated-056",
+    "imageUrl": "/seed/curated/curated-056.png",
+    "wordCount": 82,
+    "label": "LinkedIn · post",
+    "bucket": "mid"
+  },
+  {
+    "id": "curated-057",
+    "imageUrl": "/seed/curated/curated-057.png",
+    "wordCount": 515,
+    "label": "X · post",
+    "bucket": "long"
+  },
+  {
+    "id": "curated-058",
+    "imageUrl": "/seed/curated/curated-058.png",
+    "wordCount": 62,
+    "label": "LinkedIn · post + reply",
+    "bucket": "mid"
+  }
+]

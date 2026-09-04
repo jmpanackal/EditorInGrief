@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="242" viewBox="0 0 720 242" font-family="Roboto, Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="242" fill="#0f0f0f"/>
+  <circle cx="48" cy="40" r="20" fill="#ff0000"/>
+  <text x="48" y="40" fill="#ffffff" font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="central">B</text>
+  <text x="82" y="36" fill="#f1f1f1" font-size="15" font-weight="700">@Brian25</text>
+  <text x="159.6" y="36" fill="#aaaaaa" font-size="13">2 weeks ago</text>
+  <text x="82" y="80" fill="#f1f1f1" font-size="22"><tspan x="82" dy="0">bookmarking because I will forget in 12 hours. 3:17</tspan><tspan x="82" dy="30">is the money part.</tspan><tspan x="82" dy="30"> </tspan><tspan x="82" dy="30">the pinned comment is actually useful for once</tspan></text>
+  <text x="82" y="206" fill="#aaaaaa" font-size="14">👍 121    👎     Reply</text>
+</svg>

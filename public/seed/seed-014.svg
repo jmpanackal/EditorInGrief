@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="508" viewBox="0 0 720 508" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="508" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">SO</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Sneha OBrien</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Girlboss | Sales Director at Maple Education Inc.</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">I shadowed support for a morning and came back</tspan><tspan x="36" dy="36">humbled.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Apology without a next step is just noise.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">A clear ETA beats a hopeful maybe.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I replaced jargon with the next concrete step</tspan><tspan x="36" dy="36">the customer can take.</tspan></text>
+  <line x1="36" y1="452" x2="684" y2="452" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="486" fill="#00000099" font-size="18">♥ 206   💬 26</text>
+  <text x="684" y="486" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

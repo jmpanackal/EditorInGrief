@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1012" viewBox="0 0 720 1012" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1012" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">FH</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">Felipe Han</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@lily.tran</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26"><tspan x="36" dy="0">Monday started with a mess. Bedtime took 40</tspan><tspan x="36" dy="36">minutes and involved three cups of water.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">By Wednesday the pattern was obvious. Dinner</tspan><tspan x="36" dy="36">was simple and the conversation was better for</tspan><tspan x="36" dy="36">it.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Friday I finally named it out loud. Ask what</tspan><tspan x="36" dy="36">help looks like before you offer solutions.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Happy to compare notes.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Repair after conflict is the actual parenting</tspan><tspan x="36" dy="36">skill.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I stopped correcting every detail and listened</tspan><tspan x="36" dy="36">for the story underneath.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I am learning to apologize to a seven-year-old</tspan><tspan x="36" dy="36">without making it a speech.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I caught myself using my work voice at home</tspan><tspan x="36" dy="36">and had to reset.</tspan></text>
+  <line x1="36" y1="956" x2="684" y2="956" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="990" fill="#536471" font-size="18">♥ 565   ↺ 85   💬 25</text>
+  <text x="684" y="990" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>

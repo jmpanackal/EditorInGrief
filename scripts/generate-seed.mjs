@@ -1,109 +1,51 @@
 /**
  * Seed-bank generator for "Editor in Grief".
  *
- * We can't source real screenshots, so we render mock social-media / news posts
- * as self-contained SVG "screenshots" into public/seed/, plus a manifest.json.
- *
- * Why SVG (not PNG)? It's dependency-free and cross-platform (no native `canvas`
- * build on Windows). Browsers render same-origin SVG in <img>, and drawing that
- * <img> onto a canvas does NOT taint it, so the redaction editor can still
- * flatten to a real PNG on submit. Good enough to be fully testable.
- *
- * Run: `npm run seed`  (outputs to /public/seed)
+ *   npm run seed           → wave 1 (50 short / 50 mid / 50 long)
+ *   npm run seed -- --full → 300 per bucket (900)
  */
-import { mkdirSync, writeFileSync, readdirSync, unlinkSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readdirSync, unlinkSync, existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { pick } from './seed-data/pools.mjs';
+import {
+  firstNWords,
+  wordCount,
+  TRYHARD_CLOSERS,
+} from './seed-data/content.mjs';
+import { createGeneratePosts } from './seed-data/generate-posts.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const outDir = join(__dirname, '..', 'public', 'seed');
 
-// ---------------------------------------------------------------------------
-// Mock post data (deliberately cringy/ridiculous — that's the joke)
-// ---------------------------------------------------------------------------
-const POSTS = [
-  {
-    platform: 'linkedin', name: 'Chad Synergy', handle: 'Chief Vibes Officer @ HustleCorp',
-    body: `I fired my highest performer today.\n\nWhy? He asked for a raise.\n\nAt HustleCorp we don't reward people who "want more money." We reward passion. We reward grit. We reward showing up at 4:45 AM to grind before the grind.\n\nRemember: your salary is a mindset. Agree?`,
-  },
-  {
-    platform: 'linkedin', name: 'Brenda Ladderclimb', handle: 'Thought Leader | Ex-Google | Girlboss',
-    body: `A homeless man asked me for change today.\n\nInstead of money, I handed him my business card and told him about the power of personal branding.\n\nHe didn't say thank you. Some people just aren't ready to scale.`,
-  },
-  {
-    platform: 'linkedin', name: 'Tyler Growthmind', handle: 'Founder, CEO, Visionary, Dad, Athlete',
-    body: `Rejection email from a candidate today:\n\n"I noticed the role pays $32k for a Senior Engineer with 9 years experience."\n\nEntitlement is a disease. We offer something money can't buy: exposure. I will die on this hill.`,
-  },
-  {
-    platform: 'twitter', name: 'nightowl', handle: '@doomscroller3am',
-    body: `just microwaved my phone instead of my burrito and honestly? both of us are cooked now`,
-  },
-  {
-    platform: 'twitter', name: 'Kevin', handle: '@kevin_takes_L',
-    body: `unpopular opinion but i think cereal is a soup and the milk is the broth and if you disagree you are simply not thinking about it hard enough. blocked.`,
-  },
-  {
-    platform: 'twitter', name: 'crypto king 🚀', handle: '@moonboy_capital',
-    body: `sold my car to buy the dip. sold the dip to buy a smaller dip. i now live inside the dip. this is financial freedom and you are all still slaves to your "jobs"`,
-  },
-  {
-    platform: 'twitter', name: 'wellness coach', handle: '@rawwater_randy',
-    body: `Day 14 of only drinking sunlight. I have never felt more energy. My doctor is "concerned" but he also eats bread so who's really the sick one here.`,
-  },
-  {
-    platform: 'youtube', name: '@GamerLord9000', handle: '2.3K subscribers • 4 hours ago',
-    body: `first!!! also nobody gonna talk about how the guy in the back at 3:47 is CLEARLY a time traveler?? wake up sheeple this whole video is staged by the government to sell more toasters`,
-  },
-  {
-    platform: 'youtube', name: '@ProudParent55', handle: 'reply • 1 day ago',
-    body: `back in MY day we didn't have "tutorials" we just figured it out or we DIED. this generation can't even change a tire without watching a 40 minute video with 6 sponsor segments. sad!!`,
-  },
-  {
-    platform: 'youtube', name: '@RecipeHater', handle: 'reply • 2 weeks ago',
-    body: `i made this recipe but i replaced the flour with sand, removed the sugar, used no oven, and it came out terrible. 0 stars. would not recommend. the author clearly doesn't know how to cook.`,
-  },
-  {
-    platform: 'news', name: 'The Daily Overstate', handle: 'BREAKING NEWS',
-    body: `Local Man Who Read One Article Now Smartest Person At Dinner Table, Family Confirms\n\n"He mentioned 'the algorithm' four times," said his exhausted wife. "We just wanted to eat lasagna."`,
-  },
-  {
-    platform: 'news', name: 'Regional Herald', handle: 'TECHNOLOGY',
-    body: `Study Finds 100% Of People Surveyed Were Asked A Question\n\nResearchers spent $2.4 million to determine that participants who were given a survey did, in fact, receive a survey. "Groundbreaking," said no one.`,
-  },
-  {
-    platform: 'news', name: 'City Times', handle: 'LIFESTYLE',
-    body: `Man Announces He's "Basically A Chef" After Successfully Boiling Water Without Setting Off Smoke Alarm\n\nHe is now accepting reservations for a dinner party he will inevitably cancel.`,
-  },
-  {
-    platform: 'facebook', name: 'Sharon Pattersen', handle: 'Just now • 🌎 Public',
-    body: `PLEASE READ AND SHARE!!! I heard from my sister's coworker's dentist that if you microwave a grape it opens a portal. The GOVERNMENT doesn't want you to know this. Do your own research!!! 🍇🔥`,
-  },
-  {
-    platform: 'facebook', name: 'Uncle Dave', handle: '3 hrs • 😡',
-    body: `so let me get this straight. i have to press "1" for english IN MY OWN COUNTRY? unbelievable. anyway happy birthday to my beautiful granddaughter i love you sweetie ❤️ (how do i post just to her)`,
-  },
-  {
-    platform: 'twitter', name: 'startup guy', handle: '@disrupt_everything',
-    body: `we're not a "lemonade stand." we're a hyper-local, direct-to-consumer, citrus-based beverage platform leveraging synergistic sidewalk infrastructure. seeking $4M seed round. no lemons yet.`,
-  },
-  {
-    platform: 'linkedin', name: 'Karen Optimize', handle: 'People-First Leader (I laid off 400 people)',
-    body: `Grateful and humbled to announce I've made the difficult decision to let go of 30% of my team so I could afford a second boat.\n\nThis was the hardest thing I've ever posted from my yacht. #Blessed #Leadership`,
-  },
-  {
-    platform: 'youtube', name: '@FactChecker42', handle: 'reply • 3 days ago',
-    body: `ackshually the earth isn't round OR flat. it's shaped like a burrito. i have a 9 hour video explaining this with no evidence but a lot of confidence. link in my bio (i don't have a bio)`,
-  },
+const args = process.argv.slice(2);
+const FULL = args.includes('--full');
+const REPORT_ONLY = args.includes('--report-only');
+
+const BUCKETS = {
+  short: { min: 20, max: 45, count: FULL ? 300 : 50 },
+  mid: { min: 85, max: 115, count: FULL ? 300 : 50 },
+  long: { min: 210, max: 300, count: FULL ? 300 : 50 },
+};
+
+const PLATFORM_MIX = [
+  ['linkedin', 0.4],
+  ['twitter', 0.25],
+  ['facebook', 0.15],
+  ['youtube', 0.1],
+  ['news', 0.1],
 ];
 
-// ---------------------------------------------------------------------------
-// Theme per platform
-// ---------------------------------------------------------------------------
+const BANNED_NAME_RE =
+  /\b(synergy|hustlecorp|hustle corp|grindify|vibes officer|growthmind|ladderclimb|moonboy|disrupt_everything|rawwater)\b/i;
+
+const MAX_FIRST_NAME = FULL ? 4 : 2;
+
 const THEMES = {
   linkedin: { bg: '#ffffff', header: '#f3f2ef', name: '#000000c9', handle: '#00000099', body: '#000000d9', accent: '#0a66c2', avatar: '#0a66c2' },
-  twitter:  { bg: '#ffffff', header: '#ffffff', name: '#0f1419', handle: '#536471', body: '#0f1419', accent: '#1d9bf0', avatar: '#1d9bf0' },
-  youtube:  { bg: '#ffffff', header: '#ffffff', name: '#0f0f0f', handle: '#606060', body: '#0f0f0f', accent: '#065fd4', avatar: '#ff0000' },
-  news:     { bg: '#fffdf7', header: '#111111', name: '#111111', handle: '#b91c1c', body: '#1a1a1a', accent: '#b91c1c', avatar: '#111111' },
+  twitter: { bg: '#ffffff', header: '#ffffff', name: '#0f1419', handle: '#536471', body: '#0f1419', accent: '#1d9bf0', avatar: '#1d9bf0' },
+  youtube: { bg: '#0f0f0f', header: '#0f0f0f', name: '#f1f1f1', handle: '#aaaaaa', body: '#f1f1f1', accent: '#3ea6ff', avatar: '#ff0000' },
+  news: { bg: '#fffdf7', header: '#111111', name: '#111111', handle: '#b91c1c', body: '#1a1a1a', accent: '#b91c1c', avatar: '#111111' },
   facebook: { bg: '#ffffff', header: '#f0f2f5', name: '#050505', handle: '#65676b', body: '#050505', accent: '#1877f2', avatar: '#1877f2' },
 };
 
@@ -111,22 +53,22 @@ const WIDTH = 720;
 const PAD = 36;
 const AVATAR = 56;
 
-// naive word-wrap: approx char width for the given font size
 function wrapParagraph(text, fontSize, maxWidth) {
-  const charW = fontSize * 0.54; // rough average glyph width
+  const charW = fontSize * 0.54;
   const maxChars = Math.max(8, Math.floor(maxWidth / charW));
   const lines = [];
   for (const rawLine of text.split('\n')) {
-    if (rawLine.trim() === '') { lines.push(''); continue; }
+    if (rawLine.trim() === '') {
+      lines.push('');
+      continue;
+    }
     let cur = '';
     for (const word of rawLine.split(' ')) {
-      const test = cur ? cur + ' ' + word : word;
+      const test = cur ? `${cur} ${word}` : word;
       if (test.length > maxChars && cur) {
         lines.push(cur);
         cur = word;
-      } else {
-        cur = test;
-      }
+      } else cur = test;
     }
     if (cur) lines.push(cur);
   }
@@ -138,36 +80,122 @@ function esc(s) {
 }
 
 function initials(name) {
-  return name.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
+  return (
+    name
+      .replace(/[^A-Za-z ]/g, '')
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0].toUpperCase())
+      .join('') || '?'
+  );
 }
 
-function wordCount(text) {
-  return text.split(/\s+/).filter(Boolean).length;
+function displayNameForPlatform(platform, name, rng) {
+  if (platform === 'youtube') return `@${name.split(' ')[0].replace(/[^A-Za-z]/g, '')}${Math.floor(rng() * 90 + 10)}`;
+  if (platform === 'news') {
+    return pick(rng, [
+      'Regional Herald',
+      'City Ledger',
+      'Metro Daily',
+      'County Record',
+      'Harbor Tribune',
+      'Prairie Dispatch',
+    ]);
+  }
+  return name;
+}
+
+/** Shelf labels for Suggested fillers: platform · format only (never author names). */
+function typeLabelForPost(post) {
+  switch (post.platform) {
+    case 'linkedin':
+      return 'LinkedIn · post';
+    case 'twitter':
+      return 'X · post';
+    case 'facebook':
+      return 'Facebook · post';
+    case 'youtube':
+      return 'YouTube · comment';
+    case 'news':
+      return 'News · article';
+    default:
+      return 'Post';
+  }
+}
+
+function firstNameOf(displayName, fallbackFullName) {
+  if (displayName.startsWith('@')) {
+    const m = displayName.slice(1).match(/^[A-Za-z]+/);
+    return (m ? m[0] : fallbackFullName.split(' ')[0]).toLowerCase();
+  }
+  if (/Herald|Ledger|Daily|Record|Tribune|Dispatch/i.test(displayName)) {
+    return fallbackFullName.split(' ')[0].toLowerCase();
+  }
+  return displayName.split(' ')[0].toLowerCase();
+}
+
+function renderYoutubeComment(post) {
+  const t = THEMES.youtube;
+  const av = 40;
+  const bodyFont = 22;
+  const pad = 28;
+  const contentWidth = WIDTH - pad * 2 - av - 14;
+  const bodyLines = wrapParagraph(post.body, bodyFont, contentWidth);
+  const lineH = Math.round(bodyFont * 1.35);
+  const nameRowY = 36;
+  const bodyTop = 58;
+  const bodyH = Math.max(lineH, bodyLines.length * lineH);
+  const actionY = bodyTop + bodyH + 28;
+  const height = actionY + 36;
+  const avCx = pad + av / 2;
+  const avCy = 40;
+  const textX = pad + av + 14;
+  const likes = 3 + (post.body.length % 240);
+  const bodyTspans = bodyLines
+    .map((ln, i) => `<tspan x="${textX}" dy="${i === 0 ? 0 : lineH}">${esc(ln) || ' '}</tspan>`)
+    .join('');
+  const handle = post.handle || '2 days ago';
+  const nameWidth = Math.min(280, 12 + post.name.length * 8.2);
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}" font-family="Roboto, Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="${WIDTH}" height="${height}" fill="${t.bg}"/>
+  <circle cx="${avCx}" cy="${avCy}" r="${av / 2}" fill="#ff0000"/>
+  <text x="${avCx}" y="${avCy}" fill="#ffffff" font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="central">${esc(initials(post.name.replace('@', '')))}</text>
+  <text x="${textX}" y="${nameRowY}" fill="${t.name}" font-size="15" font-weight="700">${esc(post.name)}</text>
+  <text x="${textX + nameWidth}" y="${nameRowY}" fill="${t.handle}" font-size="13">${esc(handle)}</text>
+  <text x="${textX}" y="${bodyTop + bodyFont}" fill="${t.body}" font-size="${bodyFont}">${bodyTspans}</text>
+  <text x="${textX}" y="${actionY}" fill="${t.handle}" font-size="14">👍 ${likes}    👎     Reply</text>
+</svg>`;
 }
 
 function renderSvg(post) {
+  if (post.platform === 'youtube') return renderYoutubeComment(post);
+
   const t = THEMES[post.platform] ?? THEMES.twitter;
   const bodyFont = 26;
   const contentWidth = WIDTH - PAD * 2;
   const bodyLines = wrapParagraph(post.body, bodyFont, contentWidth);
   const lineH = Math.round(bodyFont * 1.4);
-
   const headerH = 40 + AVATAR;
   const bodyTop = headerH + 24;
   const bodyH = bodyLines.length * lineH;
   const footerH = 64;
   const height = bodyTop + bodyH + footerH;
-
   const isNews = post.platform === 'news';
-
   const bodyTspans = bodyLines
     .map((ln, i) => `<tspan x="${PAD}" dy="${i === 0 ? 0 : lineH}">${esc(ln) || ' '}</tspan>`)
     .join('');
-
-  // header
   const avatarCx = PAD + AVATAR / 2;
   const avatarCy = 28 + AVATAR / 2;
   const textX = PAD + AVATAR + 16;
+  const footerIcons =
+    post.platform === 'twitter'
+      ? `♥ ${1 + (post.body.length % 900)}   ↺ ${1 + (post.body.length % 120)}   💬 ${1 + (post.body.length % 60)}`
+      : post.platform === 'facebook'
+        ? 'Like · Comment · Share'
+        : `♥ ${1 + (post.body.length % 900)}   💬 ${1 + (post.body.length % 60)}`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}" font-family="Segoe UI, Helvetica, Arial, sans-serif">
@@ -177,37 +205,169 @@ function renderSvg(post) {
   <text x="${avatarCx}" y="${avatarCy}" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">${esc(initials(post.name))}</text>
   <text x="${textX}" y="42" fill="${isNews ? '#ffffff' : t.name}" font-size="24" font-weight="700">${esc(post.name)}</text>
   <text x="${textX}" y="72" fill="${isNews ? '#ffd7d7' : t.handle}" font-size="18">${esc(post.handle)}</text>
-  <text x="${PAD}" y="${bodyTop + bodyFont}" fill="${t.body}" font-size="${bodyFont}" style="white-space:pre">${bodyTspans}</text>
+  <text x="${PAD}" y="${bodyTop + bodyFont}" fill="${t.body}" font-size="${bodyFont}">${bodyTspans}</text>
   <line x1="${PAD}" y1="${height - footerH + 8}" x2="${WIDTH - PAD}" y2="${height - footerH + 8}" stroke="#00000014" stroke-width="1"/>
-  <text x="${PAD}" y="${height - 22}" fill="${t.handle}" font-size="18">♥ ${1 + (post.body.length % 900)}   ↺ ${1 + (post.body.length % 120)}   💬 ${1 + (post.body.length % 60)}</text>
+  <text x="${PAD}" y="${height - 22}" fill="${t.handle}" font-size="18">${footerIcons}</text>
   <text x="${WIDTH - PAD}" y="${height - 22}" fill="${t.accent}" font-size="16" font-weight="600" text-anchor="end">${post.platform.toUpperCase()}</text>
 </svg>`;
 }
 
-// ---------------------------------------------------------------------------
-// Emit files
-// ---------------------------------------------------------------------------
-mkdirSync(outDir, { recursive: true });
+function buildVarietyReport(posts) {
+  const topics = new Set();
+  const voices = new Set();
+  const structures = new Set();
+  const structureHist = {};
+  const platforms = {};
+  const buckets = {};
+  const first8 = new Map();
+  const firstNameCounts = new Map();
+  let tryhardClosers = 0;
+  const nameLens = [];
+  let banned = 0;
 
-// clean previously generated seed files
-for (const f of readdirSync(outDir)) {
-  if (f.endsWith('.svg') || f === 'manifest.json') unlinkSync(join(outDir, f));
+  for (const p of posts) {
+    topics.add(p.topic);
+    voices.add(p.voice);
+    structures.add(p.structure);
+    structureHist[p.structure] = (structureHist[p.structure] || 0) + 1;
+    platforms[p.platform] = (platforms[p.platform] || 0) + 1;
+    buckets[p.bucket] = (buckets[p.bucket] || 0) + 1;
+    const key = firstNWords(p.body, 8);
+    first8.set(key, (first8.get(key) || 0) + 1);
+    if (TRYHARD_CLOSERS.some((c) => p.body.trim().endsWith(c))) tryhardClosers += 1;
+    nameLens.push(p.name.length);
+    if (BANNED_NAME_RE.test(p.name) || BANNED_NAME_RE.test(p.handle) || BANNED_NAME_RE.test(p.company || '')) banned += 1;
+    const fn = (p.firstName || firstNameOf(p.name, p.name)).toLowerCase();
+    firstNameCounts.set(fn, (firstNameCounts.get(fn) || 0) + 1);
+  }
+
+  const uniqueFirst8 = [...first8.keys()].length;
+  const uniqueRatio = posts.length ? uniqueFirst8 / posts.length : 0;
+  const maxFirst8 = Math.max(0, ...first8.values());
+  const shortNames = nameLens.filter((n) => n < 10).length;
+  const longNames = nameLens.filter((n) => n > 18).length;
+  const maxFirstNameCount = Math.max(0, ...firstNameCounts.values());
+  const structureValues = Object.values(structureHist);
+  const structureMax = Math.max(0, ...structureValues);
+  const structureMin = Math.min(...structureValues);
+  const expectedPerStructure = posts.length / Math.max(1, structures.size);
+  const structureEven = structureMax <= Math.ceil(expectedPerStructure * (FULL ? 2.8 : 2.5));
+
+  const gates = {
+    topicsMin: FULL ? topics.size >= 24 : topics.size >= 18,
+    voicesMin: FULL ? voices.size >= 10 : voices.size >= 8,
+    structuresMin: FULL ? structures.size >= 12 : structures.size >= 10,
+    uniqueFirst8: FULL ? uniqueRatio >= 0.92 : uniqueRatio >= 0.95,
+    maxOpenerFreq: FULL ? maxFirst8 <= 4 : maxFirst8 <= 3,
+    tryhardCloserShare: tryhardClosers / Math.max(1, posts.length) <= 0.25,
+    bannedNames: banned === 0,
+    nameLengthSpread: shortNames >= 1 && longNames >= 1,
+    maxFirstNameFreq: maxFirstNameCount <= MAX_FIRST_NAME + 1,
+    structureEvenness: structureMax <= Math.ceil(expectedPerStructure * (FULL ? 3.2 : 2.8)),
+  };
+
+  return {
+    generatedAt: new Date().toISOString(),
+    mode: FULL ? 'full' : 'wave1',
+    total: posts.length,
+    platforms,
+    buckets,
+    topicCount: topics.size,
+    voiceCount: voices.size,
+    structureCount: structures.size,
+    structureHistogram: structureHist,
+    structureSpread: structureMax - structureMin,
+    uniqueFirst8Ratio: Number(uniqueRatio.toFixed(4)),
+    maxFirst8Repeat: maxFirst8,
+    maxFirstNameCount,
+    tryhardCloserShare: Number((tryhardClosers / Math.max(1, posts.length)).toFixed(4)),
+    bannedHits: banned,
+    nameLength: {
+      min: Math.min(...nameLens),
+      max: Math.max(...nameLens),
+      shortCount: shortNames,
+      longCount: longNames,
+    },
+    gates,
+    passed: Object.values(gates).every(Boolean),
+  };
 }
 
-const manifest = [];
-POSTS.forEach((post, idx) => {
-  const n = String(idx + 1).padStart(2, '0');
-  const id = `seed-${n}`;
-  const file = `${id}.svg`;
-  writeFileSync(join(outDir, file), renderSvg(post), 'utf8');
-  manifest.push({
-    id,
-    imageUrl: `/seed/${file}`,
-    wordCount: wordCount(post.body),
-    label: `${post.name} (${post.platform})`,
-  });
+const generatePosts = createGeneratePosts({
+  FULL,
+  BUCKETS,
+  PLATFORM_MIX,
+  BANNED_NAME_RE,
+  MAX_FIRST_NAME,
+  displayNameForPlatform,
 });
 
-writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+function loadCuratedEntries() {
+  // Curated real screenshots live in public/seed/curated/ + manifest.curated.json.
+  // Never delete that folder here — only wipe synthetic SVGs / variety report.
+  const curatedPath = join(outDir, 'manifest.curated.json');
+  if (!existsSync(curatedPath)) return [];
+  try {
+    const raw = JSON.parse(readFileSync(curatedPath, 'utf8'));
+    return Array.isArray(raw) ? raw.filter((e) => String(e?.id || '').startsWith('curated-')) : [];
+  } catch {
+    return [];
+  }
+}
 
-console.log(`Generated ${manifest.length} seed sources -> ${outDir}`);
+function emit(posts) {
+  mkdirSync(outDir, { recursive: true });
+  for (const f of readdirSync(outDir)) {
+    // Preserve curated/ subdirectory and manifest.curated.json across regen.
+    if (f.endsWith('.svg') || f === 'manifest.json' || f === 'variety-report.json') {
+      unlinkSync(join(outDir, f));
+    }
+  }
+
+  const manifest = [];
+  posts.forEach((post, idx) => {
+    const n = String(idx + 1).padStart(FULL ? 4 : 3, '0');
+    const id = `seed-${n}`;
+    const file = `${id}.svg`;
+    writeFileSync(join(outDir, file), renderSvg(post), 'utf8');
+    manifest.push({
+      id,
+      imageUrl: `/seed/${file}`,
+      wordCount: post.wordCount ?? wordCount(post.body),
+      label: typeLabelForPost(post),
+      bucket: post.bucket,
+      topic: post.topic,
+      title: post.title || null,
+    });
+  });
+
+  const curated = loadCuratedEntries();
+  if (curated.length) manifest.push(...curated);
+
+  const report = buildVarietyReport(posts);
+  writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+  writeFileSync(join(outDir, 'variety-report.json'), JSON.stringify(report, null, 2), 'utf8');
+
+  console.log(
+    `Generated ${manifest.length} seed sources (${posts.length} synthetic + ${curated.length} curated) -> ${outDir}`,
+  );
+  console.log(`Variety report passed: ${report.passed}`);
+  console.log(JSON.stringify(report.gates, null, 2));
+  console.log(
+    `topics=${report.topicCount} voices=${report.voiceCount} structures=${report.structureCount} uniqueFirst8=${report.uniqueFirst8Ratio} maxFirstName=${report.maxFirstNameCount}`,
+  );
+  console.log('platforms', JSON.stringify(report.platforms));
+  console.log('structureHistogram', JSON.stringify(report.structureHistogram));
+  if (!report.passed) {
+    console.warn('Variety gates failed — inspect public/seed/variety-report.json');
+    process.exitCode = 1;
+  }
+}
+
+if (REPORT_ONLY) {
+  console.log('Re-run npm run seed to regenerate with metadata.');
+  process.exit(0);
+}
+
+const posts = generatePosts();
+emit(posts);

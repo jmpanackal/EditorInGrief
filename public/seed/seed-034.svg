@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="212" viewBox="0 0 720 212" font-family="Roboto, Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="212" fill="#0f0f0f"/>
+  <circle cx="48" cy="40" r="20" fill="#ff0000"/>
+  <text x="48" y="40" fill="#ffffff" font-size="16" font-weight="700" text-anchor="middle" dominant-baseline="central">B</text>
+  <text x="82" y="36" fill="#f1f1f1" font-size="15" font-weight="700">@Beatriz29</text>
+  <text x="176" y="36" fill="#aaaaaa" font-size="13">2 weeks ago</text>
+  <text x="82" y="80" fill="#f1f1f1" font-size="22"><tspan x="82" dy="0">solid teaching still think that shortcut is risky.</tspan><tspan x="82" dy="30">I sent this to my group chat immediately. ignore</tspan><tspan x="82" dy="30">half the replies under this.</tspan></text>
+  <text x="82" y="176" fill="#aaaaaa" font-size="14">👍 131    👎     Reply</text>
+</svg>

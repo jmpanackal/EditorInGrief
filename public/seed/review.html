@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Seed wave 1 review — Editor in Grief</title>
+  <style>
+    :root { font-family: Georgia, "Times New Roman", serif; background: #f4f1e9; color: #1a1a1a; }
+    body { margin: 0; padding: 24px; }
+    h1 { font-size: 1.6rem; margin: 0 0 8px; }
+    .meta { color: #555; margin-bottom: 20px; max-width: 52rem; line-height: 1.45; }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    button {
+      font: inherit; border: 2px solid #1a1a1a; background: #fff; padding: 6px 12px; cursor: pointer;
+    }
+    button.active { background: #1a1a1a; color: #fff; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+    figure {
+      margin: 0; border: 2px solid #1a1a1a; background: #fff; display: flex; flex-direction: column;
+    }
+    figcaption {
+      font-size: 0.85rem; padding: 8px 10px; border-top: 1px solid #ddd; line-height: 1.35;
+    }
+    img { width: 100%; height: auto; display: block; background: #eee; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>Wave 1 seed review (150)</h1>
+  <p class="meta">
+    Filter by length bucket, skim names/copy, and note anything that feels like obvious parody.
+    Open <code>variety-report.json</code> for gate stats. When happy, say the word and we’ll run <code>npm run seed:full</code>.
+  </p>
+  <div class="tabs" id="tabs"></div>
+  <div class="grid" id="grid"></div>
+  <script>
+    async function main() {
+      const manifest = await fetch('./manifest.json').then((r) => r.json());
+      const grid = document.getElementById('grid');
+      const tabs = document.getElementById('tabs');
+      const buckets = ['all', 'short', 'mid', 'long'];
+      let active = 'all';
+
+      function render() {
+        grid.innerHTML = '';
+        for (const item of manifest) {
+          if (active !== 'all' && item.bucket !== active) continue;
+          const fig = document.createElement('figure');
+          fig.innerHTML = `
+            <img src=".${item.imageUrl.replace('/seed', '')}" alt="${item.label}" loading="lazy" />
+            <figcaption>
+              <strong>${item.id}</strong> · ${item.bucket} · ${item.wordCount} words<br/>
+              ${item.label}
+            </figcaption>`;
+          grid.appendChild(fig);
+        }
+        for (const btn of tabs.querySelectorAll('button')) {
+          btn.classList.toggle('active', btn.dataset.bucket === active);
+        }
+      }
+
+      for (const b of buckets) {
+        const btn = document.createElement('button');
+        btn.textContent = b === 'all' ? `All (${manifest.length})` : `${b} (${manifest.filter((x) => x.bucket === b).length})`;
+        btn.dataset.bucket = b;
+        btn.onclick = () => { active = b; render(); };
+        tabs.appendChild(btn);
+      }
+      render();
+    }
+    main();
+  </script>
+</body>
+</html>

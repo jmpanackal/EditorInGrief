@@ -6,6 +6,9 @@
   "description": "A browser-based, Jackbox-style multiplayer party game where players redact screenshots to make them funny.",
   "scripts": {
     "seed": "node scripts/generate-seed.mjs",
+    "seed:full": "node scripts/generate-seed.mjs --full",
+    "seed:report": "node scripts/generate-seed.mjs --report-only",
+    "seed:curated": "node scripts/generate-curated-manifest.mjs",
     "dev": "concurrently -n server,client -c magenta,cyan \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "tsx watch --tsconfig tsconfig.node.json server/index.ts",
     "dev:client": "vite",

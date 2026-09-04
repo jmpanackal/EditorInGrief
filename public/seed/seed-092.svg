@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="904" viewBox="0 0 720 904" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="904" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">VO</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">Varun Okafor</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@claireh</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26"><tspan x="36" dy="0">A near-miss on payroll taught me to watch cash</tspan><tspan x="36" dy="36">earlier.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I separated founder feelings from customer</tspan><tspan x="36" dy="36">evidence in the doc.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">- Trade perfect for finished when the clock is</tspan><tspan x="36" dy="36">real.</tspan><tspan x="36" dy="36">- Close the loop when it is done.</tspan><tspan x="36" dy="36">- Check who is missing before you decide.</tspan><tspan x="36" dy="36">- Protect one block of uninterrupted time.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Write the strategy so it survives a busy week.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Fundraising is a means, not the mission.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">One customer interview changed our roadmap</tspan><tspan x="36" dy="36">more than a month of opinions.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Culture is how you handle bad metrics.</tspan></text>
+  <line x1="36" y1="848" x2="684" y2="848" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="882" fill="#536471" font-size="18">♥ 499   ↺ 19   💬 19</text>
+  <text x="684" y="882" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>

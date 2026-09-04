@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1048" viewBox="0 0 720 1048" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1048" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">KR</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">Kiran Reyes</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@ayo.ionescu</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26"><tspan x="36" dy="0">Service day reminded me how local problems</tspan><tspan x="36" dy="36">actually get solved.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We followed the intake process instead of</tspan><tspan x="36" dy="36">improvising "helpfulness."</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I learned the difference between what looks</tspan><tspan x="36" dy="36">good and what is needed.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Give time when money is tight. Give money when</tspan><tspan x="36" dy="36">time is tight.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Filing this under things I want to remember.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Proximity changes what you think is possible.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We followed the intake process instead of</tspan><tspan x="36" dy="36">improvising "helpfulness."</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Skill-based volunteering multiplies impact</tspan><tspan x="36" dy="36">when matched well.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We stayed for cleanup, which is where half the</tspan><tspan x="36" dy="36">work lives.</tspan></text>
+  <line x1="36" y1="992" x2="684" y2="992" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1026" fill="#536471" font-size="18">♥ 553   ↺ 73   💬 13</text>
+  <text x="684" y="1026" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>

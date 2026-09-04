@@ -38,9 +38,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // ---------------------------------------------------------------------------
 function loadSeedBank(): SeedSource[] {
   try {
-    const manifestPath = join(__dirname, '..', 'public', 'seed', 'manifest.json');
-    const raw = readFileSync(manifestPath, 'utf8');
-    return JSON.parse(raw) as SeedSource[];
+    const seedDir = join(__dirname, '..', 'public', 'seed');
+    const mainPath = join(seedDir, 'manifest.json');
+    const curatedPath = join(seedDir, 'manifest.curated.json');
+    const main = JSON.parse(readFileSync(mainPath, 'utf8')) as SeedSource[];
+    let curated: SeedSource[] = [];
+    try {
+      curated = JSON.parse(readFileSync(curatedPath, 'utf8')) as SeedSource[];
+    } catch {
+      // optional — run `npm run seed:curated` after dropping PNGs in public/seed/curated/
+    }
+    const byId = new Map<string, SeedSource>();
+    for (const s of main) byId.set(s.id, s);
+    for (const s of curated) byId.set(s.id, s); // curated wins on id clash
+    return [...byId.values()];
   } catch (err) {
     console.warn('[gameStore] Could not load seed manifest. Run `npm run seed`.', err);
     return [];
@@ -96,8 +107,21 @@ const TIMER_MODES: ReadonlySet<TimerMode> = new Set(['quick', 'normal', 'long', 
 
 /** The Lobby's source shelf always shows at least this many candidates —
  * real uploads plus wire-bank "filler" sources (Source.uploadedBy = null)
- * topping up when under the floor. Uploads never auto-displace fillers. */
-const MIN_SHELF_SOURCES = 2;
+ * topping up when under the floor. Uploads never auto-displace fillers.
+ * Default empty rooms get three suggestions (short / mid / long). */
+const MIN_SHELF_SOURCES = 3;
+
+/** Length bands aligned with seed manifests (`bucket` / generate-curated-manifest):
+ * short < 50 words, mid < 150, long ≥ 150. */
+type LengthBucket = 'short' | 'mid' | 'long';
+const LENGTH_BUCKETS: readonly LengthBucket[] = ['short', 'mid', 'long'];
+
+function lengthBucket(wordCount: number, explicit?: SeedSource['bucket']): LengthBucket {
+  if (explicit === 'short' || explicit === 'mid' || explicit === 'long') return explicit;
+  if (wordCount < 50) return 'short';
+  if (wordCount < 150) return 'mid';
+  return 'long';
+}
 
 export class GameStore {
   private rooms = new Map<string, Room>();
@@ -398,6 +422,13 @@ export class GameStore {
     // "Remove" on a filler card is really "shuffle" (syncFillerSlots below
     // immediately repicks a replacement), so the seed itself must survive.
     const isFiller = pending.uploadedBy == null;
+    // Don't let the host reroll a unique most-voted suggestion — votes locked it in.
+    if (isFiller) {
+      const { maxVotes, ids: topIds } = this.topVotedSourceIds(room);
+      if (maxVotes > 0 && topIds.length === 1 && topIds[0] === sourceId) {
+        throw new GameError('That story is most voted — you can’t reroll it.');
+      }
+    }
     if (!isFiller) this.sources.delete(pending.id);
     const next = room.state.pendingSources.slice();
     next.splice(index, 1);
@@ -826,7 +857,9 @@ export class GameStore {
    * keeps its exact position (shuffling one card must never visibly move or
    * change its neighbor). `minAdd` forces at least that many new fillers
    * (shuffle always replaces the removed filler even when the shelf already
-   * meets the floor because of player uploads). */
+   * meets the floor because of player uploads).
+   * New fillers prefer short/mid/long variety (ordered short→mid→long when
+   * filling a fresh empty shelf). */
   private syncFillerSlots(
     room: Room,
     opts: { refresh?: boolean; insertAt?: number; minAdd?: number; alsoExclude?: string[] } = {},
@@ -841,12 +874,15 @@ export class GameStore {
     }
     const shownIds = new Set(pending.map((s) => s.id));
     for (const id of opts.alsoExclude ?? []) shownIds.add(id);
-    const added = this.pickDistinctSeeds(room, toAdd, shownIds);
+    const presentBuckets = this.shelfLengthBuckets(pending);
+    const added = this.pickDistinctSeeds(room, toAdd, shownIds, presentBuckets);
     // Tiny bank: if soft-excluding the shuffled-away seed left us short, allow it back.
     if (added.length < toAdd) {
       const hardOnly = new Set(pending.map((s) => s.id));
       for (const src of added) hardOnly.add(src.id);
-      added.push(...this.pickDistinctSeeds(room, toAdd - added.length, hardOnly));
+      const nextPresent = new Set(presentBuckets);
+      for (const src of added) nextPresent.add(lengthBucket(src.wordCount));
+      added.push(...this.pickDistinctSeeds(room, toAdd - added.length, hardOnly, nextPresent));
     }
     const at = opts.insertAt != null ? Math.min(Math.max(0, opts.insertAt), pending.length) : pending.length;
     const next = pending.slice();
@@ -854,16 +890,68 @@ export class GameStore {
     room.state.pendingSources = next;
   }
 
+  /** Length buckets already represented on the shelf (uploads + fillers). */
+  private shelfLengthBuckets(pending: Source[]): Set<LengthBucket> {
+    const buckets = new Set<LengthBucket>();
+    for (const p of pending) {
+      const src = this.sources.get(p.id) ?? p;
+      buckets.add(lengthBucket(src.wordCount));
+    }
+    return buckets;
+  }
+
   /** `count` distinct seed-bank sources not already shown, preferring ones
-   * this room hasn't used yet. */
-  private pickDistinctSeeds(room: Room, count: number, excludeIds: Set<string>): Source[] {
+   * this room hasn't used yet. Fills missing short/mid/long buckets first
+   * (in that order) so a fresh shelf reads short → mid → long left-to-right,
+   * and a single-slot reroll prefers restoring whatever length band the
+   * remaining shelf is missing. */
+  private pickDistinctSeeds(
+    room: Room,
+    count: number,
+    excludeIds: Set<string>,
+    presentBuckets: Set<LengthBucket> = new Set(),
+  ): Source[] {
     if (count <= 0) return [];
     const candidates = this.seedBank.filter((s) => !excludeIds.has(s.id));
-    const unused = candidates.filter((s) => !room.usedSourceIds.includes(s.id));
-    const pool = unused.length >= count ? unused : candidates;
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    if (candidates.length === 0) return [];
+
+    const shuffle = <T,>(arr: T[]): T[] => [...arr].sort(() => Math.random() - 0.5);
+
+    /** Prefer unused seeds within a bucket; fall back to used ones in that bucket. */
+    const poolForBucket = (bucket: LengthBucket): SeedSource[] => {
+      const inBucket = candidates.filter((s) => lengthBucket(s.wordCount, s.bucket) === bucket);
+      const unused = inBucket.filter((s) => !room.usedSourceIds.includes(s.id));
+      return shuffle(unused.length > 0 ? unused : inBucket);
+    };
+
+    const byBucket: Record<LengthBucket, SeedSource[]> = {
+      short: poolForBucket('short'),
+      mid: poolForBucket('mid'),
+      long: poolForBucket('long'),
+    };
+
+    // Target buckets: cover missing bands first (short→mid→long), then cycle.
+    const covered = new Set(presentBuckets);
+    const targets: LengthBucket[] = [];
+    for (let i = 0; i < count; i++) {
+      const missing = LENGTH_BUCKETS.find((b) => !covered.has(b));
+      const target = missing ?? LENGTH_BUCKETS[i % LENGTH_BUCKETS.length];
+      targets.push(target);
+      covered.add(target);
+    }
+
     const picked: Source[] = [];
-    for (const seed of shuffled.slice(0, count)) {
+    const pickedIds = new Set<string>();
+    const takeFrom = (bucket: LengthBucket): SeedSource | undefined =>
+      byBucket[bucket].find((s) => !pickedIds.has(s.id));
+
+    for (const target of targets) {
+      // Prefer the requested length band; only cross-bucket if that band is exhausted.
+      const seed =
+        takeFrom(target) ??
+        LENGTH_BUCKETS.map(takeFrom).find((s): s is SeedSource => !!s);
+      if (!seed) break;
+      pickedIds.add(seed.id);
       const src = this.sources.get(seed.id);
       if (src) picked.push({ ...src });
     }

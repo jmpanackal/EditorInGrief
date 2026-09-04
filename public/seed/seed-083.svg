@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="940" viewBox="0 0 720 940" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="940" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1877f2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">MI</text>
+  <text x="108" y="42" fill="#050505" font-size="24" font-weight="700">Miguel Ibrahim</text>
+  <text x="108" y="72" fill="#65676b" font-size="18">3 hrs · 🌎 Public</text>
+  <text x="36" y="146" fill="#050505" font-size="26"><tspan x="36" dy="0">Monday started with a mess. I track sleep more</tspan><tspan x="36" dy="36">carefully than I track PRs.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">By Wednesday the pattern was obvious. I chose</tspan><tspan x="36" dy="36">a program I can finish on a busy week, not a</tspan><tspan x="36" dy="36">fantasy week.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Friday I finally named it out loud. Your</tspan><tspan x="36" dy="36">future joints are counting on today's</tspan><tspan x="36" dy="36">unglamorous choices.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Show up for the boring weeks. That is where</tspan><tspan x="36" dy="36">fitness is built.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I write the next workout in the calendar</tspan><tspan x="36" dy="36">before I leave the current one.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Discipline is mostly logistics.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I keep a gym bag by the door so friction</tspan><tspan x="36" dy="36">cannot win.</tspan></text>
+  <line x1="36" y1="884" x2="684" y2="884" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="918" fill="#65676b" font-size="18">Like · Comment · Share</text>
+  <text x="684" y="918" fill="#1877f2" font-size="16" font-weight="600" text-anchor="end">FACEBOOK</text>
+</svg>

@@ -1,8 +1,10 @@
+import { useEffect, useState, type MouseEvent } from 'react';
 import type { RoomApi } from '../state/useRoom';
 import { PlayerList } from './PlayerList';
 import { RoomInvite } from './RoomInvite';
 import { RoundDownload } from './Recap';
 import { ExpandableImage } from './ExpandableImage';
+import { copyImageFromUrl, type CopyImageResult } from '../lib/copyImage';
 import {
   formatRoundDuration,
   timerModeLabel,
@@ -54,85 +56,129 @@ export function Scoreboard({ room }: { room: RoomApi }) {
       : null,
   ].filter(Boolean);
 
+  const playAgainControl = room.isHost ? (
+    <div className="relative flex-[1.15] min-w-0 min-h-[2.5rem] md:min-h-0 self-stretch overflow-visible">
+      <button
+        type="button"
+        className="btn-primary w-full h-full text-[15px] sm:text-base md:text-lg !py-2 md:!py-3 !px-3 sm:!px-4 leading-tight whitespace-nowrap"
+        onClick={room.returnToLobby}
+      >
+        Play again →
+      </button>
+    </div>
+  ) : (
+    <div className="flex-1 min-w-0 text-center px-2 py-2 md:py-2">
+      <div className="text-sm font-bold text-ink3 uppercase tracking-wide">Holding copy</div>
+      <div className="text-sm text-ink3 italic">Waiting for the host to play again…</div>
+    </div>
+  );
+
   return (
-    <div className="grid gap-4 md:grid-cols-[300px_1fr] md:flex-1 md:min-h-0 animate-fade-up">
-      {/* Newsroom left — same column order as lobby, with invite chrome. */}
-      <div className="order-2 md:order-1 flex flex-col gap-2 md:min-h-0 md:overflow-y-auto">
-        <div className="card p-5 h-fit">
-          <div className="kicker text-xs mb-3 pb-2 border-b border-ink/25">
-            {voting ? 'Standings' : 'The Newsroom'}
+    // Locked to the remaining dvh (App sets overflow-hidden for scoreboard).
+    // Mobile (<md): Lobby-style one screen — player rail / scrollable edition / Invite+Play bar.
+    // Desktop (md+): 2-column Players + edition (Invite under roster) — same visual language as Lobby.
+    <div className="flex flex-col md:grid md:grid-cols-[340px_1fr] gap-2 sm:gap-3 md:gap-4 animate-fade-up min-w-0 flex-1 min-h-0 h-full">
+      {/* —— Mobile top: horizontal player rail —— */}
+      <div className="md:hidden shrink-0 grow-0 card p-2 flex flex-col gap-1.5 min-w-0 max-h-[45%]">
+        <div className="flex items-center justify-between gap-2 shrink-0">
+          <div className="min-w-0">
+            <div className="kicker text-[10px]">{voting ? 'Standings' : 'In the room'}</div>
+            <h2 className="font-display font-black text-base leading-none tracking-tight mt-0.5">
+              {voting ? 'Scores' : 'Players'}
+            </h2>
           </div>
+        </div>
+        <div className="min-h-0">
           <PlayerList
+            layout="rail"
             players={state.players}
             meId={room.playerId}
             showScores={voting}
             canRemove={room.isHost}
             onRemove={room.removePlayer}
           />
-          {!voting && (
-            <p className="text-xs text-ink3 mt-3 italic">
-              Scoring is off. Flip on voting in the newsroom to keep score.
-            </p>
-          )}
         </div>
-        <RoomInvite code={state.code} />
       </div>
 
-      {/* The Verdict — sole main content: this round’s gallery + download + CTAs. */}
-      <div className="order-1 md:order-2 card p-5 flex flex-col md:min-h-0 md:overflow-hidden">
-        {/* 3-col header: equal side slots so the title stays optically centered. */}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2 mb-2 shrink-0">
-          <div aria-hidden className="min-w-0" />
-          <div className="text-center px-2">
-            <div className="kicker text-[11px] flex items-center justify-center gap-2">
-              <span className="hr-thin w-8" /> The Verdict <span className="hr-thin w-8" />
+      {/* —— Desktop left: roster + Invite (same shell as Lobby) —— */}
+      <div className="hidden md:flex flex-col gap-2 min-w-0 h-full min-h-0">
+        <div className="card p-3 flex flex-col gap-2 shrink-0 grow-0 max-h-[50%] min-h-0 overflow-hidden">
+          <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-ink/25 shrink-0">
+            <div className="min-w-0">
+              <div className="kicker text-[10px]">{voting ? 'Standings' : 'In the room'}</div>
+              <h2 className="font-display font-black text-xl leading-none tracking-tight mt-0.5">
+                {voting ? 'Scores' : 'Players'}
+              </h2>
             </div>
-            <div className="font-display font-black text-2xl mt-1">
-              Story No. {state.roundNumber} — Final
-            </div>
-            {winnerNick && (
-              <p className="mt-1 font-display font-black text-grief text-sm">
-                Crowd favorite: {winnerNick}
-              </p>
-            )}
           </div>
-          <div className="hidden md:block justify-self-end min-w-0">
-            {latestRecap && <RoundDownload recap={latestRecap} code={state.code} />}
+          <div className="min-h-0 overflow-y-auto themed-scroll pr-0.5 -mr-0.5">
+            <PlayerList
+              players={state.players}
+              meId={room.playerId}
+              showScores={voting}
+              canRemove={room.isHost}
+              onRemove={room.removePlayer}
+            />
           </div>
         </div>
+        <div className="shrink-0">
+          <RoomInvite code={state.code} />
+        </div>
+      </div>
 
-        {/* Quiet meta line — no heavy bar */}
-        <p className="shrink-0 mb-3 text-center text-xs sm:text-sm text-ink3 font-slab tracking-wide">
-          {toastParts.join(' · ')}
-        </p>
-
-        {!round || !state.currentSource ? (
-          <div className="text-ink3 py-6 text-center italic">No copy filed this round.</div>
-        ) : (
-          <VerdictGallery
-            originalSrc={state.currentSource.imageUrl}
-            results={results}
-            players={state.players}
-            voting={voting}
-            topVotes={topVotes}
-            reactions={round.reactions ?? {}}
-            meId={room.playerId}
-            onReact={room.react}
-          />
-        )}
-
-        {room.isHost && (
-          <div className="flex flex-wrap gap-2 mt-4 justify-end shrink-0">
-            <button className="btn-primary" onClick={room.returnToLobby}>
-              Play again →
-            </button>
+      {/* —— Middle: edition scrolls; bottom bar always visible —— */}
+      <div className="flex flex-col gap-2 min-w-0 flex-1 min-h-0 md:h-full">
+        <div className="card p-3 sm:p-4 flex flex-col gap-2 min-w-0 flex-1 min-h-0 overflow-y-auto themed-scroll">
+          {/* 3-col header: title centered (Today’s Story scale); download desktop-only on the right */}
+          <div className="shrink-0 grid grid-cols-[1fr_auto_1fr] items-start gap-2 mb-1">
+            <div aria-hidden className="min-w-0" />
+            <header className="text-center px-2">
+              <div className="kicker text-[10px] sm:text-[11px] flex items-center justify-center gap-2">
+                <span className="hr-thin w-6 sm:w-8" />
+                Story No. {state.roundNumber}
+                <span className="hr-thin w-6 sm:w-8" />
+              </div>
+              <h1 className="font-display font-black text-lg sm:text-2xl leading-none tracking-tight mt-1">
+                Final Edition
+              </h1>
+              <div className="hr-double my-1 sm:my-1.5 mx-auto w-14 sm:w-24" />
+              {winnerNick && (
+                <p className="font-display font-black text-grief text-sm">
+                  Crowd favorite: {winnerNick}
+                </p>
+              )}
+              <p className="mt-1 text-xs sm:text-sm text-ink3 font-slab tracking-wide">
+                {toastParts.join(' · ')}
+              </p>
+            </header>
+            <div className="hidden md:block justify-self-end min-w-0">
+              {latestRecap && <RoundDownload recap={latestRecap} code={state.code} />}
+            </div>
           </div>
-        )}
-        {!room.isHost && (
-          <p className="text-ink3 text-sm mt-4 italic shrink-0">
-            Waiting for the host to play again…
-          </p>
-        )}
+
+          {!round || !state.currentSource ? (
+            <div className="text-ink3 py-6 text-center italic">No copy filed this round.</div>
+          ) : (
+            <VerdictGallery
+              originalSrc={state.currentSource.imageUrl}
+              results={results}
+              players={state.players}
+              voting={voting}
+              topVotes={topVotes}
+              reactions={round.reactions ?? {}}
+              meId={room.playerId}
+              onReact={room.react}
+            />
+          )}
+        </div>
+
+        {/* Bottom action bar — Invite (mobile) + Play again (Lobby Start Editing sizing) */}
+        <div className="shrink-0 card overflow-visible p-1.5 md:p-2 shadow-clip flex items-stretch gap-1.5 md:gap-1.5 min-h-0">
+          <div className="flex-[1.25] min-w-0 md:hidden self-stretch overflow-visible">
+            <RoomInvite code={state.code} compact />
+          </div>
+          {playAgainControl}
+        </div>
       </div>
     </div>
   );
@@ -183,49 +229,26 @@ function VerdictGallery({
     };
   });
 
-  // ≤3 edits = one row under Original → fit in viewport without scrolling.
-  const fitsOneScreen = playerItems.length <= 3;
   const editCount = playerItems.length;
 
   return (
-    <div
-      className={`flex-1 min-h-0 flex flex-col gap-3 ${
-        fitsOneScreen ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain'
-      }`}
-    >
-      {/* Original alone on top — height-capped when fitting one screen. */}
-      <div
-        className={`w-full flex justify-center min-h-0 ${
-          fitsOneScreen ? 'flex-[1.05_1_0%] overflow-hidden' : 'shrink-0'
-        }`}
-        data-verdict="original"
-      >
-        <div
-          className={`w-full flex flex-col min-h-0 ${
-            fitsOneScreen ? 'max-w-3xl h-full' : 'max-w-2xl'
-          }`}
-        >
+    <div className="flex flex-col gap-3">
+      <div className="w-full flex justify-center" data-verdict="original">
+        <div className="w-full flex flex-col max-w-2xl">
           <VerdictClip
             src={originalSrc}
             alt="Original source image"
             label="Original"
             dashed
             featured
-            fit={fitsOneScreen}
           />
         </div>
       </div>
 
-      {/* Edits: up to 3 per row; center when fewer than 3. */}
       {editCount > 0 && (
-        <div
-          className={`w-full min-h-0 ${
-            fitsOneScreen ? 'flex-[1_1_0%] overflow-hidden' : ''
-          }`}
-          data-verdict="edits"
-        >
+        <div className="w-full" data-verdict="edits">
           <div
-            className={`w-full h-full grid gap-3 content-stretch items-stretch ${
+            className={`w-full grid gap-3 content-start items-start ${
               editCount === 1
                 ? 'grid-cols-1 max-w-xl mx-auto'
                 : editCount === 2
@@ -241,7 +264,6 @@ function VerdictGallery({
                 reactionMap={reactions[item.id]}
                 meId={meId}
                 onReact={onReact}
-                fit={fitsOneScreen}
               />
             ))}
           </div>
@@ -264,22 +286,17 @@ function VerdictClip({
   reactionMap,
   meId,
   onReact,
-  fit = false,
 }: Omit<VerdictItem, 'id'> & {
   submissionId?: string;
   reactionMap?: Record<string, string[]>;
   meId?: string | null;
   onReact?: (submissionId: string, emoji: VerdictReactionEmoji) => void;
-  /** Constrain image to parent height so ≤3 edits fit without page scroll. */
-  fit?: boolean;
 }) {
   const showReactions = !!submissionId && !!onReact && !featured;
 
   return (
     <div
-      className={`relative rounded-[3px] overflow-hidden bg-papercard min-w-0 ${
-        fit ? 'h-full min-h-0 flex flex-col' : ''
-      } ${
+      className={`group/clip relative rounded-[3px] overflow-hidden bg-papercard min-w-0 ${
         featured
           ? 'border-[3px] border-dashed border-grief shadow-clip'
           : dashed
@@ -308,25 +325,27 @@ function VerdictClip({
           ♥ {votes}
         </span>
       )}
-      <div
+      <CopyImageButton
+        src={src}
+        filename={featured ? 'original.png' : `${slugFilename(label)}.png`}
+        label={label}
+        /* Sit below the ♥ badge when voting is on so top-right stays readable. */
+        className={votes !== undefined ? 'top-12 right-2' : 'top-2 right-2'}
+      />
+      <ExpandableImage
+        src={src}
+        alt={alt}
+        showHint
+        // Featured Original: cap height on md+ so the first submission row
+        // stays above the fold in the scrollable edition column. Mobile keeps
+        // a softer cap (middle region still scrolls). Same max-h + object-contain
+        // pattern as Lobby source previews (w-auto so aspect ratio holds).
         className={
-          fit
-            ? 'flex-1 min-h-0 flex items-center justify-center overflow-hidden bg-paper2'
-            : undefined
+          featured
+            ? 'max-h-[min(48dvh,26rem)] md:max-h-[min(34dvh,18rem)] w-auto max-w-full mx-auto h-auto object-contain bg-paper2'
+            : 'w-full h-auto object-contain bg-paper2'
         }
-      >
-        <ExpandableImage
-          src={src}
-          alt={alt}
-          showHint={!fit}
-          fill={fit}
-          className={
-            fit
-              ? 'max-h-full max-w-full w-auto h-auto object-contain'
-              : 'w-full h-auto object-contain bg-paper2'
-          }
-        />
-      </div>
+      />
       <div
         className={`px-3 py-2 flex items-center gap-2 border-t-2 shrink-0 ${
           featured
@@ -386,5 +405,80 @@ function VerdictClip({
         )}
       </div>
     </div>
+  );
+}
+
+function slugFilename(label: string): string {
+  const slug = label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || 'submission';
+}
+
+const COPY_FEEDBACK: Record<CopyImageResult, string> = {
+  copied: 'Copied',
+  downloaded: 'Saved',
+  'url-copied': 'Link',
+};
+
+/** Small letterpress copy control — hover on fine pointers; always visible on touch. */
+function CopyImageButton({
+  src,
+  filename,
+  label,
+  className = '',
+}: {
+  src: string;
+  filename: string;
+  /** Submitter nickname (or "Original") burned into the copied/saved PNG. */
+  label?: string;
+  className?: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!flash) return;
+    const t = window.setTimeout(() => setFlash(null), 1400);
+    return () => window.clearTimeout(t);
+  }, [flash]);
+
+  const onCopy = async (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await copyImageFromUrl(src, filename, label);
+      setFlash(COPY_FEEDBACK[result]);
+    } catch {
+      setFlash('Failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      disabled={busy}
+      aria-label="Copy image"
+      title="Copy image"
+      className={`absolute z-20 px-2 py-1 text-[10px] sm:text-[11px] font-slab font-bold uppercase tracking-wide
+        rounded-[2px] bg-papercard text-ink border-2 border-ink shadow-press
+        hover:bg-paper2 active:translate-x-px active:translate-y-px active:shadow-none
+        disabled:opacity-50 transition-opacity
+        opacity-100
+        [@media(hover:hover)_and_(pointer:fine)]:opacity-0
+        [@media(hover:hover)_and_(pointer:fine)]:group-hover/clip:opacity-100
+        [@media(hover:hover)_and_(pointer:fine)]:focus-visible:opacity-100
+        [@media(hover:hover)_and_(pointer:fine)]:group-focus-within/clip:opacity-100
+        ${className}`}
+    >
+      {busy ? '…' : flash ?? 'Copy'}
+    </button>
   );
 }

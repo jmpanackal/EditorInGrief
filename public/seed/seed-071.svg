@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1012" viewBox="0 0 720 1012" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1012" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">RN</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Rafael Nascimento</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Senior Accountant at Vertex Design Holdings</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">I keep a short thread on this. We ran a quiet</tspan><tspan x="36" dy="36">money meeting and it went better than</tspan><tspan x="36" dy="36">expected.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We separated rent, groceries, and annual bills</tspan><tspan x="36" dy="36">into different buckets.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">My note back to the group was basically this.</tspan><tspan x="36" dy="36">Shame is a terrible budgeting tool.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">What would you have done?</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Review subscriptions like you review recurring</tspan><tspan x="36" dy="36">meetings.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I finally logged the cash spending that used</tspan><tspan x="36" dy="36">to vanish from the plan.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Know your fixed costs cold before you chase</tspan><tspan x="36" dy="36">side income.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Insurance review found coverage we were paying</tspan><tspan x="36" dy="36">for twice.</tspan></text>
+  <line x1="36" y1="956" x2="684" y2="956" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="990" fill="#00000099" font-size="18">♥ 522   💬 42</text>
+  <text x="684" y="990" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

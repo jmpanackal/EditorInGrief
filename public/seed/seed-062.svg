@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="940" viewBox="0 0 720 940" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="940" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">JU</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Jun U. Lima</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Clinical Social Worker | Open to connect</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">A rainy walk still counted. The dog voted yes.</tspan><tspan x="36" dy="36">Here is what helped.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">- Keep the walk even when weather is annoying.</tspan><tspan x="36" dy="36">- Say the constraint out loud early.</tspan><tspan x="36" dy="36">- Close the loop when it is done.</tspan><tspan x="36" dy="36">- Protect one block of uninterrupted time.</tspan><tspan x="36" dy="36">- Leave room for a real question.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Know your emergency clinic before you need it.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Leaving it here.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Animals notice consistency.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I keep a vet fund separate from fun money now.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Caretaking softens a hard week.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">A neighbor dog meetup became a tiny social</tspan><tspan x="36" dy="36">life for both of us.</tspan></text>
+  <line x1="36" y1="884" x2="684" y2="884" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="918" fill="#00000099" font-size="18">♥ 505   💬 25</text>
+  <text x="684" y="918" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

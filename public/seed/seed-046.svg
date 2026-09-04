@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="436" viewBox="0 0 720 436" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="436" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">LK</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Lucas Kelly</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Project Coordinator at Valley Hospitality Group</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">I finally said out loud that the timeline was</tspan><tspan x="36" dy="36">fiction. The quietest person in the room often</tspan><tspan x="36" dy="36">has the missing constraint. I stopped</tspan><tspan x="36" dy="36">mid-sentence when I realized I was restating</tspan><tspan x="36" dy="36">what they already knew. A contractor had been</tspan><tspan x="36" dy="36">guessing requirements because we never shared</tspan><tspan x="36" dy="36">the</tspan></text>
+  <line x1="36" y1="380" x2="684" y2="380" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="414" fill="#00000099" font-size="18">♥ 272   💬 32</text>
+  <text x="684" y="414" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

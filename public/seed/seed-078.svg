@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1084" viewBox="0 0 720 1084" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1084" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">SK</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">Sebastian Khan</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@imani.pham</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26"><tspan x="36" dy="0">Community update: small wins count.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We collected signatures the old-fashioned way:</tspan><tspan x="36" dy="36">walking and talking.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Sharing in case it helps someone else.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Ask what is needed before you announce what</tspan><tspan x="36" dy="36">you will do.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">A disagreement stayed about the proposal, not</tspan><tspan x="36" dy="36">about people's character.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Civic life is maintenance, not a viral moment.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Listening to people you disagree with is part</tspan><tspan x="36" dy="36">of living near them.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Listen across difference without abandoning</tspan><tspan x="36" dy="36">your values.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The library event had more kids than chairs.</tspan><tspan x="36" dy="36">Good problem.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Patience is a community organizing skill.</tspan></text>
+  <line x1="36" y1="1028" x2="684" y2="1028" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1062" fill="#536471" font-size="18">♥ 553   ↺ 73   💬 13</text>
+  <text x="684" y="1062" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>

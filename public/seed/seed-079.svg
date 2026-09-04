@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="940" viewBox="0 0 720 940" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="940" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1877f2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">SS</text>
+  <text x="108" y="42" fill="#050505" font-size="24" font-weight="700">Sanjay Sullivan</text>
+  <text x="108" y="72" fill="#65676b" font-size="18">Yesterday · 🌎 Public</text>
+  <text x="36" y="146" fill="#050505" font-size="26"><tspan x="36" dy="0">A customer was right, and admitting it early</tspan><tspan x="36" dy="36">saved the relationship. Here is what helped.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">1. Say the constraint out loud early.</tspan><tspan x="36" dy="36">2. Write the decision where others can find</tspan><tspan x="36" dy="36">it.</tspan><tspan x="36" dy="36">3. Protect one block of uninterrupted time.</tspan><tspan x="36" dy="36">4. Check who is missing before you decide.</tspan><tspan x="36" dy="36">5. Leave room for a real question.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Promises should be smaller than your capacity.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Sharing in case it helps someone else.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Clarity reduces support load better than speed</tspan><tspan x="36" dy="36">alone.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We trained the team on listening first, script</tspan><tspan x="36" dy="36">second.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Measure the moments customers actually feel.</tspan></text>
+  <line x1="36" y1="884" x2="684" y2="884" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="918" fill="#65676b" font-size="18">Like · Comment · Share</text>
+  <text x="684" y="918" fill="#1877f2" font-size="16" font-weight="600" text-anchor="end">FACEBOOK</text>
+</svg>

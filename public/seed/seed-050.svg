@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="544" viewBox="0 0 720 544" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="544" fill="#fffdf7"/>
+  <rect x="0" y="0" width="720" height="96" fill="#111111"/>
+  <circle cx="64" cy="56" r="28" fill="#111111"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">RH</text>
+  <text x="108" y="42" fill="#ffffff" font-size="24" font-weight="700">Regional Herald</text>
+  <text x="108" y="72" fill="#ffd7d7" font-size="18">BUSINESS</text>
+  <text x="36" y="146" fill="#1a1a1a" font-size="26"><tspan x="36" dy="0">I pitched less and asked better discovery</tspan><tspan x="36" dy="36">questions.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We celebrated a retention win louder than a</tspan><tspan x="36" dy="36">vanity signup spike.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We set a kill criteria for experiments before</tspan><tspan x="36" dy="36">launching them.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Hire for ownership and communication early.</tspan></text>
+  <line x1="36" y1="488" x2="684" y2="488" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="522" fill="#b91c1c" font-size="18">♥ 227   💬 47</text>
+  <text x="684" y="522" fill="#b91c1c" font-size="16" font-weight="600" text-anchor="end">NEWS</text>
+</svg>

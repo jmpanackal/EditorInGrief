@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="976" viewBox="0 0 720 976" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="976" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">PS</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Priya Saleh</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Content Strategist · First Harbor Insurance</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">Monday started with a mess. A coworker left</tspan><tspan x="36" dy="36">clear notes that saved me an hour.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">By Wednesday the pattern was obvious. IT fixed</tspan><tspan x="36" dy="36">my access issue without making me feel</tspan><tspan x="36" dy="36">foolish.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Friday I finally named it out loud. Small</tspan><tspan x="36" dy="36">acknowledgments change whether people stay.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Open to other approaches.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Say it while people can still hear it.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">My manager covered a meeting so I could take</tspan><tspan x="36" dy="36">my kid to the dentist.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">End-of-week thanks reset the story you tell</tspan><tspan x="36" dy="36">about your life.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">My partner asked how the hard meeting went and</tspan><tspan x="36" dy="36">actually listened.</tspan></text>
+  <line x1="36" y1="920" x2="684" y2="920" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="954" fill="#00000099" font-size="18">♥ 527   💬 47</text>
+  <text x="684" y="954" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

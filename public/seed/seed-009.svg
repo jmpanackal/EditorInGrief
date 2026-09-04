@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="400" viewBox="0 0 720 400" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="400" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">CS</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">Chidi Singh</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@bongani.johnson</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26"><tspan x="36" dy="0">Food update: simple dinners are saving our</tspan><tspan x="36" dy="36">weeknights. I asked the server for the dish</tspan><tspan x="36" dy="36">they actually like. Good call. A farmers</tspan><tspan x="36" dy="36">market tomato made a plain sandwich feel</tspan><tspan x="36" dy="36">special. Leave restaurants better than you</tspan><tspan x="36" dy="36">found them. Tip like you mean it. That is the</tspan></text>
+  <line x1="36" y1="344" x2="684" y2="344" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="378" fill="#536471" font-size="18">♥ 258   ↺ 18   💬 18</text>
+  <text x="684" y="378" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>

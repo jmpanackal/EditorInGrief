@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="868" viewBox="0 0 720 868" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="868" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">JA</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Joon Abbas</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Girlboss | Brand Manager at Pioneer Packaging Inc.</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">We shipped something imperfect and then</tspan><tspan x="36" dy="36">supported it properly.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I asked for honesty and then defended myself</tspan><tspan x="36" dy="36">for the first ten minutes.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">- Leave room for a real question.</tspan><tspan x="36" dy="36">- Protect one block of uninterrupted time.</tspan><tspan x="36" dy="36">- Say the constraint out loud early.</tspan><tspan x="36" dy="36">- Write the decision where others can find it.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">If you lead, your calendar is a culture</tspan><tspan x="36" dy="36">document.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">The quietest person in the room often has the</tspan><tspan x="36" dy="36">missing constraint.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I stopped mid-sentence when I realized I was</tspan><tspan x="36" dy="36">restating what they already knew.</tspan></text>
+  <line x1="36" y1="812" x2="684" y2="812" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="846" fill="#00000099" font-size="18">♥ 496   💬 16</text>
+  <text x="684" y="846" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

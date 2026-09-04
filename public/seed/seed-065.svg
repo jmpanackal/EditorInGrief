@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1120" viewBox="0 0 720 1120" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1120" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#1d9bf0"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">CS</text>
+  <text x="108" y="42" fill="#0f1419" font-size="24" font-weight="700">Claire Sullivan</text>
+  <text x="108" y="72" fill="#536471" font-size="18">@gabriel.silva</text>
+  <text x="36" y="146" fill="#0f1419" font-size="26"><tspan x="36" dy="0">Trades note: show up early, leave the site</tspan><tspan x="36" dy="36">better than you found it.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We staged materials to reduce trips and</tspan><tspan x="36" dy="36">protect the lawn.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We coordinated with another trade instead of</tspan><tspan x="36" dy="36">fighting for space.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Mentorship multiplies skill across a</tspan><tspan x="36" dy="36">generation.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Quiet week, useful lesson.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Quality work does not need to shout.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">A hidden issue appeared mid-job and we called</tspan><tspan x="36" dy="36">before surprising the bill.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Bring the next person up with you.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Safety gear felt like delay until the near</tspan><tspan x="36" dy="36">miss reminded me otherwise.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Apprenticeships create careers, not just</tspan><tspan x="36" dy="36">labor.</tspan></text>
+  <line x1="36" y1="1064" x2="684" y2="1064" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1098" fill="#536471" font-size="18">♥ 542   ↺ 62   💬 2</text>
+  <text x="684" y="1098" fill="#1d9bf0" font-size="16" font-weight="600" text-anchor="end">TWITTER</text>
+</svg>

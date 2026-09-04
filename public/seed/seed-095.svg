@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1156" viewBox="0 0 720 1156" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="1156" fill="#fffdf7"/>
+  <rect x="0" y="0" width="720" height="96" fill="#111111"/>
+  <circle cx="64" cy="56" r="28" fill="#111111"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">CR</text>
+  <text x="108" y="42" fill="#ffffff" font-size="24" font-weight="700">County Record</text>
+  <text x="108" y="72" fill="#ffd7d7" font-size="18">TECHNOLOGY</text>
+  <text x="36" y="146" fill="#1a1a1a" font-size="26"><tspan x="36" dy="0">Learning how to prompt well is becoming a</tspan><tspan x="36" dy="36">workplace literacy.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I use it to generate test cases I might have</tspan><tspan x="36" dy="36">missed.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Noticing this more lately.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">AI literacy includes knowing when not to use</tspan><tspan x="36" dy="36">it.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I rewrite outputs in my own voice before</tspan><tspan x="36" dy="36">anything ships.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Policy beats vibes when tools move this fast.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I rewrite outputs in my own voice before</tspan><tspan x="36" dy="36">anything ships.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Train people on evaluation, not only on</tspan><tspan x="36" dy="36">prompting tricks.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We compared three prompts and kept the one</tspan><tspan x="36" dy="36">that asked for uncertainty.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Treat it like a junior assistant: useful, not</tspan><tspan x="36" dy="36">unsupervised.</tspan></text>
+  <line x1="36" y1="1100" x2="684" y2="1100" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="1134" fill="#b91c1c" font-size="18">♥ 549   💬 9</text>
+  <text x="684" y="1134" fill="#b91c1c" font-size="16" font-weight="600" text-anchor="end">NEWS</text>
+</svg>

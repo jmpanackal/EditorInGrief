@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="904" viewBox="0 0 720 904" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="904" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">RC</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Rahul Chen</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Executive Assistant at Northern Tools Supply</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">I finally attended the association meeting I</tspan><tspan x="36" dy="36">always skip. Here is what helped.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">- Check who is missing before you decide.</tspan><tspan x="36" dy="36">- Say the constraint out loud early.</tspan><tspan x="36" dy="36">- Close the loop when it is done.</tspan><tspan x="36" dy="36">- Follow up once, clearly.</tspan><tspan x="36" dy="36">- Write the decision where others can find it.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Civic life is maintenance, not a viral moment.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Maybe obvious. Still true for me.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Community is a practice of returning.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">We mapped who already does the work before</tspan><tspan x="36" dy="36">inventing a new group.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Listen across difference without abandoning</tspan><tspan x="36" dy="36">your values.</tspan></text>
+  <line x1="36" y1="848" x2="684" y2="848" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="882" fill="#00000099" font-size="18">♥ 514   💬 34</text>
+  <text x="684" y="882" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>

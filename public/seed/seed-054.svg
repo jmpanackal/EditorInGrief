@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="976" viewBox="0 0 720 976" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="720" height="976" fill="#ffffff"/>
+  
+  <circle cx="64" cy="56" r="28" fill="#0a66c2"/>
+  <text x="64" y="56" fill="#ffffff" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="central">FZ</text>
+  <text x="108" y="42" fill="#000000c9" font-size="24" font-weight="700">Folake Zhang</text>
+  <text x="108" y="72" fill="#00000099" font-size="18">Customer Success Manager at Grove Systems</text>
+  <text x="36" y="146" fill="#000000d9" font-size="26"><tspan x="36" dy="0">Monday started with a mess. A coworker carpool</tspan><tspan x="36" dy="36">cut costs and added a weekly check-in.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">By Wednesday the pattern was obvious. I</tspan><tspan x="36" dy="36">noticed which stations feel unsafe after dark</tspan><tspan x="36" dy="36">and adjusted routes.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Friday I finally named it out loud. Policy</tspan><tspan x="36" dy="36">change and personal tactics both matter.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Onward.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Sleep debt makes every delay feel larger.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">I noticed which stations feel unsafe after</tspan><tspan x="36" dy="36">dark and adjusted routes.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Arrive as a person, not as residual traffic</tspan><tspan x="36" dy="36">stress.</tspan><tspan x="36" dy="36"> </tspan><tspan x="36" dy="36">Parking fees finally pushed me onto transit</tspan><tspan x="36" dy="36">three days a week.</tspan></text>
+  <line x1="36" y1="920" x2="684" y2="920" stroke="#00000014" stroke-width="1"/>
+  <text x="36" y="954" fill="#00000099" font-size="18">♥ 518   💬 38</text>
+  <text x="684" y="954" fill="#0a66c2" font-size="16" font-weight="600" text-anchor="end">LINKEDIN</text>
+</svg>
