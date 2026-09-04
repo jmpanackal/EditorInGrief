@@ -93,6 +93,7 @@ type VerdictItem = {
   votes?: number;
   isWinner?: boolean;
   dashed?: boolean;
+  featured?: boolean;
 };
 
 function VerdictGallery({
@@ -108,42 +109,39 @@ function VerdictGallery({
   voting: boolean;
   topVotes: number;
 }) {
-  const items: VerdictItem[] = [
-    {
-      id: 'original',
-      src: originalSrc,
-      alt: 'Original source image',
-      label: 'Original',
-      dashed: true,
-    },
-    ...results.map((s) => {
-      const p = players.find((pl) => pl.id === s.playerId);
-      const isWinner = voting && s.votesCount > 0 && s.votesCount === topVotes;
-      return {
-        id: s.id,
-        src: s.editedImageUrl,
-        alt: `${p?.nickname ?? 'Player'}'s redaction`,
-        label: p?.nickname ?? '—',
-        votes: voting ? s.votesCount : undefined,
-        isWinner,
-      };
-    }),
-  ];
-
-  const n = items.length;
-  // 1 → single large; 2 → two cols; 3+ → 2 cols, then 3 when wide enough.
-  const gridCols =
-    n <= 1
-      ? 'grid-cols-1'
-      : n === 2
-        ? 'grid-cols-1 sm:grid-cols-2'
-        : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3';
+  const playerItems: VerdictItem[] = results.map((s) => {
+    const p = players.find((pl) => pl.id === s.playerId);
+    const isWinner = voting && s.votesCount > 0 && s.votesCount === topVotes;
+    return {
+      id: s.id,
+      src: s.editedImageUrl,
+      alt: `${p?.nickname ?? 'Player'}'s redaction`,
+      label: p?.nickname ?? '—',
+      votes: voting ? s.votesCount : undefined,
+      isWinner,
+    };
+  });
 
   return (
-    <div className={`flex-1 min-h-0 overflow-y-auto overscroll-contain grid ${gridCols} gap-3 content-start items-start`}>
-      {items.map((item) => (
-        <VerdictClip key={item.id} {...item} />
-      ))}
+    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-4 content-start">
+      {/* Original alone on top — larger, dashed grief accent, clear stamp. */}
+      <div className="w-full max-w-xl mx-auto shrink-0">
+        <VerdictClip
+          src={originalSrc}
+          alt="Original source image"
+          label="Original"
+          dashed
+          featured
+        />
+      </div>
+
+      {playerItems.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 content-start items-start">
+          {playerItems.map((item) => (
+            <VerdictClip key={item.id} {...item} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -155,18 +153,26 @@ function VerdictClip({
   votes,
   isWinner = false,
   dashed = false,
-}: VerdictItem) {
+  featured = false,
+}: Omit<VerdictItem, 'id'>) {
   return (
     <div
-      className={`relative rounded-[3px] overflow-hidden bg-papercard border-2 min-w-0 ${
-        dashed
-          ? 'border-dashed border-ink'
-          : isWinner
-            ? 'border-grief shadow-clip'
-            : 'border-ink'
+      className={`relative rounded-[3px] overflow-hidden bg-papercard min-w-0 ${
+        featured
+          ? 'border-[3px] border-dashed border-grief shadow-clip'
+          : dashed
+            ? 'border-2 border-dashed border-ink'
+            : isWinner
+              ? 'border-2 border-grief shadow-clip'
+              : 'border-2 border-ink'
       }`}
     >
-      {isWinner && (
+      {featured && (
+        <span className="absolute top-2 left-2 z-10 stamp !px-2.5 !py-1 text-[12px] animate-stamp-in">
+          Original
+        </span>
+      )}
+      {isWinner && !featured && (
         <span className="absolute top-2 left-2 z-10 stamp !px-2 !py-0.5 text-[11px] animate-stamp-in">
           Extra!
         </span>
@@ -178,10 +184,16 @@ function VerdictClip({
       />
       <div
         className={`px-2.5 py-1.5 flex items-center justify-between text-sm border-t-2 ${
-          dashed ? 'border-dashed border-ink' : 'border-ink'
+          featured
+            ? 'border-dashed border-grief bg-grief/5'
+            : dashed
+              ? 'border-dashed border-ink'
+              : 'border-ink'
         }`}
       >
-        <span className="truncate font-semibold">{label}</span>
+        <span className={`truncate font-semibold ${featured ? 'font-display font-black tracking-wide uppercase text-[13px]' : ''}`}>
+          {label}
+        </span>
         {votes !== undefined && (
           <span className="tabular-nums font-display font-black text-grief">♥{votes}</span>
         )}
