@@ -28,7 +28,7 @@ export function ExpandableImage({ src, alt, className, buttonClassName = '' }: E
         className={`block w-full text-left focus:outline-none focus:ring-2 focus:ring-grief/60 ${buttonClassName}`}
         aria-label={`Expand ${alt}`}
       >
-        <img src={src} alt={alt} className={className} />
+        <img src={src} alt={alt} className={`block ${className}`} />
         <span className="block text-center text-[10px] font-semibold text-ink2 py-1 bg-paper hover:text-grief">
           Click to expand
         </span>

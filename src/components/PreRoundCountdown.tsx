@@ -49,7 +49,7 @@ export function PreRoundCountdown({ countdownStartedAt, clockOffsetMs }: Props) 
       </div>
       <div className="mt-5 hr-double w-40 sm:w-56" />
       <p className="mt-4 text-sm text-ink2 italic font-slab">
-        {isGo ? 'Markers up — redact!' : 'Get ready to black out the story…'}
+        {isGo ? 'Markers up — redact!' : 'Get ready to redact the story…'}
       </p>
     </div>
   );

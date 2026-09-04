@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { timerModeLabel, type TimerMode } from '@shared/types';
 import type { RoomApi } from '../state/useRoom';
 import { RedactionEditor } from './RedactionEditor';
-import { Countdown } from './Countdown';
+import { Countdown, CountdownIdle } from './Countdown';
 import { PreRoundCountdown } from './PreRoundCountdown';
 
 export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetMs: number }) {
@@ -62,77 +62,77 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
   }, [inCountdown, submittedByMe, untimed, round.startedAt, round.timerSeconds, clockOffsetMs, requestAutoSubmit]);
 
   const isUpload = source.uploadedBy != null;
+  const prompt = inCountdown
+    ? 'Get ready…'
+    : submittedByMe
+      ? (untimed
+          ? 'Filed — waiting for others…'
+          : 'Filed — waiting for others or the deadline…')
+      : 'Redact the story to make it funnier.';
 
   return (
-    <div className="flex flex-col gap-4 animate-fade-up">
-      <div className="card p-4 sm:p-5 flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <div className="kicker text-xs flex items-center gap-2 flex-wrap">
+    <div className="flex flex-col flex-1 min-h-0 h-full gap-1.5 sm:gap-2 animate-fade-up">
+      {/* Compact chrome: meta row + slim horizontal deadline bar (no circular-only timer) */}
+      <div className="card shrink-0 px-2.5 sm:px-3 py-1.5 flex flex-col gap-1.5">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+            <span className="kicker text-[9px] sm:text-[10px] whitespace-nowrap shrink-0">
               Story No. {state.roundNumber}
-              {untimed ? (
-                <span className="pill">No time limit</span>
-              ) : (
-                <span className="pill">{lengthBadge(round.timerMode, round.timerSeconds)}</span>
-              )}
-              <span className="pill">{isUpload ? 'Wire upload' : 'Wire photo'}</span>
-            </div>
-            <div className="font-display font-black text-xl mt-1">
-              {inCountdown ? 'Get ready…' : 'Black out the story to make it funnier.'}
-            </div>
+            </span>
+            {!untimed && (
+              <span className="pill !px-1.5 !py-0 text-[9px] sm:text-[10px] hidden sm:inline-flex shrink-0">
+                {lengthBadge(round.timerMode, round.timerSeconds)}
+              </span>
+            )}
+            {untimed && (
+              <span className="pill !px-1.5 !py-0 text-[9px] sm:text-[10px] hidden sm:inline-flex shrink-0">
+                No time limit
+              </span>
+            )}
+            <span className="pill !px-1.5 !py-0 text-[9px] sm:text-[10px] hidden md:inline-flex shrink-0">
+              {isUpload ? 'Wire upload' : 'Wire photo'}
+            </span>
+            <span className={`font-display font-black text-sm sm:text-base truncate min-w-0 ${submittedByMe && !inCountdown ? 'text-ink2 italic' : ''}`}>
+              {prompt}
+            </span>
           </div>
-          <span className={`pill font-display font-black transition-transform ${filedPulse ? 'animate-pop bg-grief text-paper border-ink scale-110' : ''}`}>
+
+          <span
+            className={`pill font-display font-black shrink-0 transition-transform text-[10px] sm:text-xs ${
+              filedPulse ? 'animate-pop bg-grief text-paper border-ink scale-110' : ''
+            }`}
+          >
             {readyCount}/{connected} filed
           </span>
+
+          {untimed && (
+            <UntimedStatus
+              inCountdown={inCountdown}
+              submittedByMe={submittedByMe}
+              readyCount={readyCount}
+              connected={connected}
+              showForce={room.isHost && !inCountdown}
+              onForce={() => room.forceReveal()}
+            />
+          )}
         </div>
-        {untimed ? (
-          <div className="flex items-center gap-3 w-full flex-wrap">
-            <span className="kicker text-[10px] hidden sm:inline">Status</span>
-            <div className="font-display text-xl font-black leading-none text-ink">
-              {inCountdown
-                ? 'No deadline'
-                : submittedByMe
-                  ? 'Waiting for others…'
-                  : 'File when ready'}
-            </div>
-            <div className="flex-1 h-3 rounded-[2px] bg-paper2 overflow-hidden border-2 border-ink/40 min-w-[4rem]">
-              <div
-                className="h-full bg-ink transition-[width] duration-300"
-                style={{ width: `${connected > 0 ? (readyCount / connected) * 100 : 0}%` }}
-              />
-            </div>
-            {room.isHost && !inCountdown && (
-              <button
-                type="button"
-                className="btn-secondary text-sm"
-                onClick={() => room.forceReveal()}
-              >
-                Force reveal
-              </button>
-            )}
-          </div>
-        ) : inCountdown ? (
-          <div className="flex items-center gap-3 w-full opacity-60">
-            <span className="kicker text-[10px] hidden sm:inline">Deadline</span>
-            <div className="font-display text-3xl font-black tabular-nums leading-none text-ink3">
-              {String(Math.floor(round.timerSeconds / 60)).padStart(1, '0')}:
-              {String(round.timerSeconds % 60).padStart(2, '0')}
-            </div>
-            <div className="flex-1 h-3 rounded-[2px] bg-paper2 overflow-hidden border-2 border-ink/40">
-              <div className="h-full bg-ink/25" style={{ width: '100%' }} />
-            </div>
-          </div>
-        ) : (
-          <Countdown
-            startedAt={round.startedAt}
-            durationSeconds={round.timerSeconds}
-            clockOffsetMs={clockOffsetMs}
-            onExpire={handleExpire}
-          />
+
+        {!untimed && (
+          inCountdown ? (
+            <CountdownIdle durationSeconds={round.timerSeconds} />
+          ) : (
+            <Countdown
+              startedAt={round.startedAt}
+              durationSeconds={round.timerSeconds}
+              clockOffsetMs={clockOffsetMs}
+              onExpire={handleExpire}
+            />
+          )
         )}
       </div>
 
-      <div className="card p-4 sm:p-5 relative overflow-hidden">
+      {/* Stage — fills remaining viewport; editor chrome stays inside */}
+      <div className="card flex-1 min-h-0 p-1.5 sm:p-2 relative overflow-hidden flex flex-col">
         {inCountdown && (
           <PreRoundCountdown
             countdownStartedAt={round.countdownStartedAt}
@@ -149,13 +149,45 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
           storageKey={room.playerId ? `eig.draft.${round.id}.${room.playerId}` : undefined}
         />
       </div>
+    </div>
+  );
+}
 
-      {submittedByMe && !inCountdown && (
-        <p className="text-center text-ink2 text-sm italic">
-          {untimed
-            ? 'Filed to the desk. The reveal runs when everyone has filed.'
-            : 'Filed to the desk. The reveal runs when everyone submits or the deadline passes.'}
-        </p>
+function UntimedStatus({
+  inCountdown,
+  submittedByMe,
+  readyCount,
+  connected,
+  showForce,
+  onForce,
+}: {
+  inCountdown: boolean;
+  submittedByMe: boolean;
+  readyCount: number;
+  connected: number;
+  showForce: boolean;
+  onForce: () => void;
+}) {
+  const label = inCountdown
+    ? 'No deadline'
+    : submittedByMe
+      ? 'Waiting…'
+      : 'File when ready';
+  const pct = connected > 0 ? (readyCount / connected) * 100 : 0;
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <div className="flex flex-col items-end gap-0.5 min-w-[4.5rem]">
+        <span className="font-display text-xs sm:text-sm font-black leading-none text-ink whitespace-nowrap">
+          {label}
+        </span>
+        <div className="w-16 sm:w-20 h-1.5 rounded-[2px] bg-paper2 overflow-hidden border border-ink/40">
+          <div className="h-full bg-ink transition-[width] duration-300" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+      {showForce && (
+        <button type="button" className="btn-secondary !px-2 !py-1 text-[10px] sm:text-xs" onClick={onForce}>
+          Force
+        </button>
       )}
     </div>
   );

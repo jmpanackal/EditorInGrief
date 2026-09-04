@@ -13,6 +13,7 @@ export function Voting({ room }: { room: RoomApi }) {
         <div className="kicker text-[11px]">The ballot is open</div>
         <h2 className="font-display font-black text-2xl mt-1">Choose the edition that got you.</h2>
         <p className="text-sm text-ink2 mt-1">Every filing gets the same space. You may change your vote; you cannot vote for your own edit.</p>
+        <p className="text-xs text-ink3 mt-1 italic">Tallies stay sealed until the ballot closes — no peeking at the count.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -22,9 +23,6 @@ export function Voting({ room }: { room: RoomApi }) {
           const isPicked = myVote === submission.id;
           return (
             <article key={submission.id} className={`relative flex flex-col rounded-[3px] overflow-hidden border-2 bg-papercard ${isPicked ? 'border-grief shadow-clip' : 'border-ink'}`}>
-              <span className="absolute top-2 right-2 z-10 pill !bg-ink !text-paper" aria-label={`${submission.votesCount} votes`}>
-                ♥ {submission.votesCount}
-              </span>
               <ExpandableImage
                 src={submission.editedImageUrl}
                 alt={`${player?.nickname ?? 'Player'}'s redaction`}

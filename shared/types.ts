@@ -153,6 +153,7 @@ export interface RoomState {
   hostId: string;
   players: Player[];
   votingEnabled: boolean; // room-level setting (off by default)
+  maxPlayers: number; // host-configured room capacity (default DEFAULT_MAX_PLAYERS)
   roundSettings: RoundSettings; // host-configured settings for the next round
   roundNumber: number;
   /** The source chosen for the current/most-recent round (denormalized for clients). */
@@ -185,12 +186,13 @@ export type ClientMessage =
   | { type: 'rejoin'; code: string; playerId: string } // reconnect support
   | { type: 'removePlayer'; playerId: string } // host only
   | { type: 'setVoting'; enabled: boolean } // host only
+  | { type: 'setMaxPlayers'; max: number } // host only; clamped to MIN/MAX_PLAYERS
   | { type: 'setRoundSettings'; settings: Partial<RoundSettings> } // host only
   // Players can file multiple screenshots for later rounds. Image travels as a
   // downscaled data URL through the same WS channel and lives for the session.
   | { type: 'uploadSource'; imageUrl: string; wordCount: number; ocrText: string | null }
   | { type: 'clearSource'; sourceId: string }
-  | { type: 'voteForSource'; sourceId: string }
+  | { type: 'voteForSource'; sourceId: string | null } // null clears your vote
   | { type: 'selectSource'; sourceId: string | null } // host only
   | { type: 'startRound'; sourceId?: string } // host only; sourceId optional (else random from bank)
   | { type: 'submit'; roundId: string; editedImageUrl: string }
@@ -237,6 +239,17 @@ export const AUTO_TIMER_MAX = 210;
 /** Custom time-picker bounds (seconds). */
 export const CUSTOM_TIMER_MIN = 30;
 export const CUSTOM_TIMER_MAX = 600;
+
+/** Room capacity bounds + default. */
+export const MIN_PLAYERS = 2;
+export const MAX_PLAYERS = 24;
+export const DEFAULT_MAX_PLAYERS = 10;
+
+/** Clamp a host-chosen room capacity into sane bounds. */
+export function clampMaxPlayers(max: number): number {
+  if (!Number.isFinite(max)) return DEFAULT_MAX_PLAYERS;
+  return Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, Math.round(max)));
+}
 
 /** @deprecated Use TIMER_QUICK_SECONDS. Kept so older imports don't break mid-refactor. */
 export const QUICKFIRE_SECONDS = TIMER_QUICK_SECONDS;

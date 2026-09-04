@@ -1,16 +1,13 @@
 /**
  * Client-side "newspaper front page" composer + share/download helpers.
  *
- * Given the per-round recaps accumulated in {@link RoomApi.history}, we lay the
- * original screenshots and every player's redacted result out as a single tall
- * PNG styled like the front page of THE REDACTIONIST'S GAZETTE, entirely in a
- * canvas — no backend. Works with the in-memory model because every image is
- * already present client-side (seed URLs are same-origin; submissions are data
- * URLs), so the canvas never taints and `toBlob` succeeds.
+ * Pass one or more {@link RoundRecap}s — the scoreboard downloads a single
+ * round (the Verdict just finished). Layout is a tall PNG styled like the
+ * front page of THE REDACTIONIST'S GAZETTE, entirely in canvas — no backend.
+ * Images are already client-side (seed URLs / data URLs), so the canvas never
+ * taints and `toBlob` succeeds.
  *
- * PHASE 4 TODO: for permanent shareable *links* we'd upload this PNG (or the
- * underlying rounds) to object storage and mint a URL. For now we hand the user
- * the file directly via the Web Share API (mobile) or a download fallback.
+ * PHASE 4 TODO: permanent shareable *links* via object storage.
  */
 import type { RoundRecap } from '@shared/types';
 
@@ -142,12 +139,11 @@ function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxW: number): s
 }
 
 /**
- * Compose the whole run into one tall canvas. Returns the canvas (caller turns
- * it into a Blob). Multi-round safe: every round contributes a titled grid and
- * the canvas grows vertically to fit; tiles scale to a sensible size per row.
+ * Compose round(s) into one tall canvas. Pass a single-element array for the
+ * usual per-round Verdict download. Extra rounds stack vertically if needed.
  */
 export async function composeFrontPage(
-  history: RoundRecap[],
+  rounds: RoundRecap[],
   meta: FrontPageMeta,
 ): Promise<HTMLCanvasElement> {
   await ensureFonts();
@@ -155,13 +151,13 @@ export async function composeFrontPage(
   // Preload every image up front (source + all submissions), keyed by id.
   const images = new Map<string, HTMLImageElement | null>();
   await Promise.all(
-    history.flatMap((r) => [
+    rounds.flatMap((r) => [
       loadImage(r.source.imageUrl).then((im) => void images.set(r.source.id, im)),
       ...r.submissions.map((s) => loadImage(s.editedImageUrl).then((im) => void images.set(s.id, im))),
     ]),
   );
 
-  const blocks = history.map((r) => layoutRound(r, images));
+  const blocks = rounds.map((r) => layoutRound(r, images));
 
   const MASTHEAD_H = 172;
   const FOOTER_H = 70;
@@ -179,8 +175,8 @@ export async function composeFrontPage(
   ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, PAGE_W, totalH);
 
-  const totalPlayers = new Set(history.flatMap((r) => r.submissions.map((s) => s.playerId))).size;
-  const totalEdits = history.reduce((n, r) => n + r.submissions.length, 0);
+  const totalPlayers = new Set(rounds.flatMap((r) => r.submissions.map((s) => s.playerId))).size;
+  const totalEdits = rounds.reduce((n, r) => n + r.submissions.length, 0);
 
   // ---- Masthead --------------------------------------------------------
   let y = MARGIN;
@@ -208,7 +204,7 @@ export async function composeFrontPage(
   ctx.font = `600 13px ${SLAB}`;
   ctx.fillStyle = INK3;
   ctx.fillText(
-    `${meta.date}  ·  EDITION No. ${meta.code}  ·  ${history.length} STOR${history.length === 1 ? 'Y' : 'IES'}  ·  ${totalPlayers} REDACTOR${totalPlayers === 1 ? '' : 'S'}  ·  ${totalEdits} EDITS`,
+    `${meta.date}  ·  EDITION No. ${meta.code}  ·  ${rounds.length} STOR${rounds.length === 1 ? 'Y' : 'IES'}  ·  ${totalPlayers} REDACTOR${totalPlayers === 1 ? '' : 'S'}  ·  ${totalEdits} EDITS`,
     PAGE_W / 2,
     ruleY + 90,
   );

@@ -91,11 +91,34 @@ function sendText(res: ServerResponse, status: number, body: string) {
   res.end(body);
 }
 
-const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+const wss = new WebSocketServer({
+  server: httpServer,
+  path: '/ws',
+  // Uploaded screenshots travel as data URLs inside JSON state snapshots.
+  // Default is 100MB; keep a generous ceiling but fail clearly if exceeded.
+  maxPayload: 32 * 1024 * 1024,
+});
 
 // code -> set of live sockets
 const roomSockets = new Map<string, Set<WebSocket>>();
 const meta = new WeakMap<WebSocket, SocketMeta>();
+/**
+ * playerId -> every socket currently open for that player.
+ *
+ * Normally exactly one, but there are two ways a SECOND one can briefly
+ * coexist: (a) a legitimate reconnect — page reload, brief network blip —
+ * where the old socket's close event can arrive at the server AFTER the new
+ * one has already reattached/rejoined (they're independent TCP connections;
+ * the server has no guarantee they're processed in the "expected" order),
+ * and (b) two tabs that somehow share the same playerId both rejoining.
+ * Identity is now tab-scoped (sessionStorage), which prevents the common
+ * "second tab opens invite and becomes the host" case; reference-counting
+ * still covers reconnect races. Getting this wrong flips a still-connected
+ * player back to disconnected; for the host that arms scheduleHostTransfer
+ * and can hand the room to someone else a few seconds later for no real
+ * reason (reported live as "the invited player becomes host").
+ */
+const playerSockets = new Map<string, Set<WebSocket>>();
 
 function attach(ws: WebSocket, code: string, playerId: string) {
   const m = meta.get(ws) ?? {};
@@ -108,6 +131,12 @@ function attach(ws: WebSocket, code: string, playerId: string) {
     roomSockets.set(code, set);
   }
   set.add(ws);
+  let pset = playerSockets.get(playerId);
+  if (!pset) {
+    pset = new Set();
+    playerSockets.set(playerId, pset);
+  }
+  pset.add(ws);
 }
 
 function send(ws: WebSocket, msg: ServerMessage) {
@@ -115,6 +144,7 @@ function send(ws: WebSocket, msg: ServerMessage) {
 }
 
 function disconnectPlayerSockets(code: string, playerId: string) {
+  playerSockets.delete(playerId);
   const sockets = roomSockets.get(code);
   if (!sockets) return;
   for (const socket of sockets) {
@@ -135,9 +165,20 @@ store.broadcast = (code: string) => {
   const state = store.getState(code);
   if (!state) return;
   const payload: ServerMessage = { type: 'state', state };
-  const data = JSON.stringify(payload);
+  let data: string;
+  try {
+    data = JSON.stringify(payload);
+  } catch (err) {
+    console.error('[server] failed to serialize state for', code, err);
+    return;
+  }
   for (const ws of set) {
-    if (ws.readyState === WebSocket.OPEN) ws.send(data);
+    if (ws.readyState !== WebSocket.OPEN) continue;
+    try {
+      ws.send(data);
+    } catch (err) {
+      console.error('[server] failed to send state to a client in', code, err);
+    }
   }
 };
 
@@ -166,7 +207,19 @@ wss.on('connection', (ws) => {
     const m = meta.get(ws);
     if (m?.code) {
       roomSockets.get(m.code)?.delete(ws);
-      if (m.playerId) store.markDisconnected(m.code, m.playerId);
+      // Only mark the player disconnected once THIS was the last open socket
+      // for them — see playerSockets above for why a simple "most recent
+      // wins" check isn't enough.
+      if (m.playerId) {
+        const pset = playerSockets.get(m.playerId);
+        if (pset) {
+          pset.delete(ws);
+          if (pset.size === 0) {
+            playerSockets.delete(m.playerId);
+            store.markDisconnected(m.code, m.playerId);
+          }
+        }
+      }
     }
   });
 });
@@ -205,6 +258,9 @@ function handle(ws: WebSocket, msg: ClientMessage) {
       break;
     case 'setVoting':
       withPlayer(ws, (code, pid) => store.setVoting(code, pid, msg.enabled));
+      break;
+    case 'setMaxPlayers':
+      withPlayer(ws, (code, pid) => store.setMaxPlayers(code, pid, msg.max));
       break;
     case 'setRoundSettings':
       withPlayer(ws, (code, pid) => store.setRoundSettings(code, pid, msg.settings));

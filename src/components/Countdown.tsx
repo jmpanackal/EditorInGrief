@@ -8,7 +8,9 @@ interface Props {
 }
 
 /** A synced countdown. Each device derives remaining time from the shared
- * round start time (+ a clock-skew correction), so nobody is ahead. */
+ * round start time (+ a clock-skew correction), so nobody is ahead.
+ * Compact horizontal deadline bar — readable length cue without stealing
+ * viewport height from the editor stage. */
 export function Countdown({ startedAt, durationSeconds, clockOffsetMs, onExpire }: Props) {
   const [remaining, setRemaining] = useState(durationSeconds);
   const firedRef = useRef(false);
@@ -51,10 +53,11 @@ export function Countdown({ startedAt, durationSeconds, clockOffsetMs, onExpire 
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [startedAt, durationSeconds, clockOffsetMs]);
 
-  const pct = Math.max(0, Math.min(1, remaining / durationSeconds));
+  const pct = durationSeconds > 0 ? Math.max(0, Math.min(1, remaining / durationSeconds)) : 0;
   const secs = Math.ceil(remaining);
   const danger = remaining <= 10;
   const warn = remaining <= 30 && !danger;
+  const label = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 
   // A tiny generated beep keeps the bundle asset-free. Browsers only permit
   // sound after a user gesture; when they decline it, this harmlessly no-ops.
@@ -81,16 +84,45 @@ export function Countdown({ startedAt, durationSeconds, clockOffsetMs, onExpire 
   }, [danger, secs]);
 
   return (
-    <div className="flex items-center gap-3 w-full">
-      <span className="kicker text-[10px] hidden sm:inline">Deadline</span>
-      <div className={`font-display text-3xl font-black tabular-nums leading-none ${danger ? 'text-grief animate-pulse' : 'text-ink'}`}>
-        {String(Math.floor(secs / 60)).padStart(1, '0')}:{String(secs % 60).padStart(2, '0')}
+    <div
+      className={`flex items-center gap-2 sm:gap-2.5 w-full min-w-0 ${danger ? 'animate-pulse' : ''}`}
+      role="timer"
+      aria-live="polite"
+      aria-label={`Deadline ${label}`}
+      title={`Deadline ${label}`}
+    >
+      <span className="kicker text-[9px] sm:text-[10px] shrink-0 hidden sm:inline">Deadline</span>
+      <div
+        className={`font-display text-base sm:text-lg font-black tabular-nums leading-none shrink-0 ${
+          danger ? 'text-grief' : warn ? 'text-gold' : 'text-ink'
+        }`}
+      >
+        {label}
       </div>
-      <div className="flex-1 h-3 rounded-[2px] bg-paper2 overflow-hidden border-2 border-ink">
+      <div className="flex-1 h-2 sm:h-2.5 rounded-[2px] bg-paper2 overflow-hidden border border-ink min-w-0">
         <div
-          className={`h-full transition-[width] duration-200 ease-linear ${danger ? 'bg-grief' : warn ? 'bg-gold' : 'bg-ink'}`}
+          className={`h-full transition-[width] duration-200 ease-linear ${
+            danger ? 'bg-grief' : warn ? 'bg-gold' : 'bg-ink'
+          }`}
           style={{ width: `${pct * 100}%` }}
         />
+      </div>
+    </div>
+  );
+}
+
+/** Static bar used during the pre-round countdown (full, dimmed). */
+export function CountdownIdle({ durationSeconds }: { durationSeconds: number }) {
+  const secs = Math.max(0, Math.ceil(durationSeconds));
+  const label = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+  return (
+    <div className="flex items-center gap-2 sm:gap-2.5 w-full min-w-0 opacity-50" aria-hidden="true" title={`Deadline ${label}`}>
+      <span className="kicker text-[9px] sm:text-[10px] shrink-0 hidden sm:inline">Deadline</span>
+      <div className="font-display text-base sm:text-lg font-black tabular-nums leading-none shrink-0 text-ink3">
+        {label}
+      </div>
+      <div className="flex-1 h-2 sm:h-2.5 rounded-[2px] bg-paper2 overflow-hidden border border-ink min-w-0">
+        <div className="h-full w-full bg-ink" />
       </div>
     </div>
   );

@@ -21,6 +21,32 @@
 }
 
 @layer components {
+  /* --- Themed scrollbar for internally-scrolling panels (roster, source
+      shelf) — a thin kraft-on-paper track instead of the OS default, so an
+      internal scroll region still reads as part of the newsprint UI. */
+  .themed-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #c9c0ac #e8e2d3; /* thumb: darker kraft; track: paper2 */
+  }
+  .themed-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .themed-scroll::-webkit-scrollbar-track {
+    background: #e8e2d3; /* paper2 */
+    border-radius: 3px;
+  }
+  .themed-scroll::-webkit-scrollbar-thumb {
+    background-color: #c9c0ac;
+    border-radius: 3px;
+    border: 2px solid #e8e2d3; /* paper2 — insets the thumb off the track edge */
+  }
+  .themed-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: #a9791f; /* gold */
+  }
+}
+
+@layer components {
   /* --- Kicker / small caps label --------------------------------------- */
   .kicker {
     @apply font-slab uppercase tracking-[0.18em] text-ink3 font-semibold;

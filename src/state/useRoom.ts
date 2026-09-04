@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RoomState, RoundRecap, RoundSettings, ServerMessage } from '@shared/types';
 import type { ConnectionStatus, Transport } from '../transport/Transport';
 import { WebSocketTransport } from '../transport/WebSocketTransport';
+import { syncRoomUrl } from '../lib/roomUrl';
 
 const IDENTITY_KEY = 'eig.identity.v1';
 
@@ -11,19 +12,35 @@ interface Identity {
   nickname: string;
 }
 
+/**
+ * Tab-scoped seat identity (sessionStorage). localStorage used to share one
+ * playerId across every tab in the browser, so opening an invite in a second
+ * tab silently rejoined as the host instead of joining as a guest — and the
+ * address bar could still show a different ?code= from the invite link.
+ * First tab after upgrade claims any legacy localStorage identity, then clears
+ * it so later tabs start clean.
+ */
 function loadIdentity(): Identity | null {
   try {
-    const raw = localStorage.getItem(IDENTITY_KEY);
-    return raw ? (JSON.parse(raw) as Identity) : null;
+    const raw = sessionStorage.getItem(IDENTITY_KEY);
+    if (raw) return JSON.parse(raw) as Identity;
+    const legacy = localStorage.getItem(IDENTITY_KEY);
+    if (legacy) {
+      sessionStorage.setItem(IDENTITY_KEY, legacy);
+      localStorage.removeItem(IDENTITY_KEY);
+      return JSON.parse(legacy) as Identity;
+    }
   } catch {
-    return null;
+    /* ignore */
   }
+  return null;
 }
 
 function saveIdentity(id: Identity | null): void {
   try {
-    if (id) localStorage.setItem(IDENTITY_KEY, JSON.stringify(id));
-    else localStorage.removeItem(IDENTITY_KEY);
+    if (id) sessionStorage.setItem(IDENTITY_KEY, JSON.stringify(id));
+    else sessionStorage.removeItem(IDENTITY_KEY);
+    localStorage.removeItem(IDENTITY_KEY);
   } catch {
     /* ignore */
   }
@@ -46,10 +63,11 @@ export interface RoomApi {
   removePlayer: (playerId: string) => void;
 
   setVoting: (enabled: boolean) => void;
+  setMaxPlayers: (max: number) => void;
   setRoundSettings: (settings: Partial<RoundSettings>) => void;
   uploadSource: (imageUrl: string, wordCount: number, ocrText: string | null) => void;
   clearSource: (sourceId: string) => void;
-  voteForSource: (sourceId: string) => void;
+  voteForSource: (sourceId: string | null) => void;
   selectSource: (sourceId: string | null) => void;
   startRound: (sourceId?: string) => void;
   submit: (roundId: string, editedImageUrl: string) => void;
@@ -193,15 +211,25 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
     setPlayerId(null);
     setState(null);
     setHistory([]);
+    syncRoomUrl(null);
   }, []);
+
+  // Keep the address bar on the LIVE room code so invite/copy/share never
+  // advertise a stale ?code= from a previous invite. Only write when we have a
+  // code — never clear here on mount, or we'd erase the invite link before
+  // JoinScreen can prefill it (leave() clears explicitly).
+  useEffect(() => {
+    if (state?.code) syncRoomUrl(state.code);
+  }, [state?.code]);
 
   const removePlayer = useCallback((playerId: string) => send({ type: 'removePlayer', playerId }), [send]);
 
   const setVoting = useCallback((enabled: boolean) => send({ type: 'setVoting', enabled }), [send]);
+  const setMaxPlayers = useCallback((max: number) => send({ type: 'setMaxPlayers', max }), [send]);
   const setRoundSettings = useCallback((settings: Partial<RoundSettings>) => send({ type: 'setRoundSettings', settings }), [send]);
   const uploadSource = useCallback((imageUrl: string, wordCount: number, ocrText: string | null) => send({ type: 'uploadSource', imageUrl, wordCount, ocrText }), [send]);
   const clearSource = useCallback((sourceId: string) => send({ type: 'clearSource', sourceId }), [send]);
-  const voteForSource = useCallback((sourceId: string) => send({ type: 'voteForSource', sourceId }), [send]);
+  const voteForSource = useCallback((sourceId: string | null) => send({ type: 'voteForSource', sourceId }), [send]);
   const selectSource = useCallback((sourceId: string | null) => send({ type: 'selectSource', sourceId }), [send]);
   const startRound = useCallback((sourceId?: string) => send({ type: 'startRound', sourceId }), [send]);
   const submit = useCallback((roundId: string, editedImageUrl: string) => send({ type: 'submit', roundId, editedImageUrl }), [send]);
@@ -229,6 +257,7 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
     leave,
     removePlayer,
     setVoting,
+    setMaxPlayers,
     setRoundSettings,
     uploadSource,
     clearSource,

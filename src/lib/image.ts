@@ -37,11 +37,11 @@ export function dataUrlBytes(dataUrl: string): number {
 
 /**
  * Read a File, downscale so the longest edge is <= maxEdge, and re-encode.
- * PNGs with transparency are kept as PNG; everything else becomes JPEG for size.
+ * Prefer JPEG for WS payload size; keep PNG only for tiny images.
  */
 export async function prepareUpload(
   file: File,
-  { maxEdge = 1600, quality = 0.85 }: { maxEdge?: number; quality?: number } = {},
+  { maxEdge = 1400, quality = 0.8 }: { maxEdge?: number; quality?: number } = {},
 ): Promise<PreparedImage> {
   if (!ACCEPTED_TYPES.includes(file.type)) {
     throw new Error('Please choose a PNG, JPEG, WebP, or GIF image.');
@@ -66,24 +66,35 @@ export async function prepareUpload(
     if (!ctx) throw new Error('Canvas is unavailable in this browser.');
     ctx.drawImage(img, 0, 0, w, h);
 
-    // Keep PNG (lossless) only for genuinely small images; otherwise JPEG for payload size.
-    const preferPng = file.type === 'image/png' && w * h <= 900 * 900;
+    // Prefer JPEG for payload size; keep PNG only for tiny images.
+    const preferPng = file.type === 'image/png' && w * h <= 700 * 700;
     const mime = preferPng ? 'image/png' : 'image/jpeg';
     let dataUrl = canvas.toDataURL(mime, quality);
+    let outW = w;
+    let outH = h;
 
-    // Safety net: if JPEG is still huge, step the longest edge down and retry once.
-    if (dataUrlBytes(dataUrl) > 5 * 1024 * 1024 && Math.max(w, h) > 1200) {
-      const s2 = 1200 / Math.max(w, h);
-      const w2 = Math.round(w * s2);
-      const h2 = Math.round(h * s2);
-      canvas.width = w2;
-      canvas.height = h2;
-      ctx.drawImage(img, 0, 0, w2, h2);
-      dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      return { dataUrl, width: w2, height: h2, bytes: dataUrlBytes(dataUrl) };
+    // Tighten until the data URL is safely under ~1.5MB so WS broadcast of
+    // full room state (fillers + several uploads) stays reliable.
+    const TARGET_BYTES = 1.5 * 1024 * 1024;
+    let q = quality;
+    let edge = Math.max(w, h);
+    for (let attempt = 0; attempt < 4 && dataUrlBytes(dataUrl) > TARGET_BYTES; attempt++) {
+      q = Math.max(0.55, q - 0.1);
+      edge = Math.max(900, Math.round(edge * 0.85));
+      const s = edge / Math.max(nw, nh);
+      outW = Math.max(1, Math.round(nw * Math.min(1, s)));
+      outH = Math.max(1, Math.round(nh * Math.min(1, s)));
+      canvas.width = outW;
+      canvas.height = outH;
+      ctx.drawImage(img, 0, 0, outW, outH);
+      dataUrl = canvas.toDataURL('image/jpeg', q);
     }
 
-    return { dataUrl, width: w, height: h, bytes: dataUrlBytes(dataUrl) };
+    if (dataUrlBytes(dataUrl) > 4 * 1024 * 1024) {
+      throw new Error('That screenshot is still too large after compressing — try a tighter crop.');
+    }
+
+    return { dataUrl, width: outW, height: outH, bytes: dataUrlBytes(dataUrl) };
   } finally {
     URL.revokeObjectURL(objectUrl);
   }

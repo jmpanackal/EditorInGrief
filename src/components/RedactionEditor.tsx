@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { disposeOcr, runOcr, type OcrBox, type OcrWord } from '../lib/ocr';
 
 /**
@@ -326,8 +326,8 @@ interface Props {
   storageKey?: string;
 }
 
-const MIN_THICKNESS = 6;
-const MAX_THICKNESS = 90;
+/** Gartic-style brush size presets (circles in the tool rail). */
+const THICKNESS_PRESETS = [10, 18, 28, 44, 64] as const;
 /** Allow zooming out below the default fit-width view to survey the whole page. */
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
@@ -1221,122 +1221,227 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   const controlsHint =
     'Default view fits the image to the viewport width (100%) for readable text — pan vertically on tall screenshots.\nZoom: scroll wheel or pinch (Reset returns to fit-width, top-aligned)\nPan: Space + drag, middle-drag, or two-finger drag\nStraight lines / squares: hold Shift (or the Straight toggle)\nTap-text: tap a word to hide/reveal, drag across to hide a range';
 
+  const tools: { id: Tool; icon: string; label: string }[] = [
+    { id: 'rect', icon: '▭', label: 'Box' },
+    { id: 'brush', icon: '✎', label: 'Marker' },
+    { id: 'words', icon: 'abc', label: 'Tap text' },
+    { id: 'eraser', icon: '⌫', label: 'Eraser' },
+  ];
+
+  const renderTools = () =>
+    tools.map((t) => (
+      <RailTool
+        key={t.id}
+        active={tool === t.id}
+        onClick={() => setTool(t.id)}
+        disabled={!interactive}
+        icon={t.icon}
+        label={t.label}
+      />
+    ));
+
+  const undoResetTools = (
+    <>
+      <RailTool
+        onClick={undo}
+        disabled={!interactive || shapeCount === 0}
+        icon="↶"
+        label="Undo"
+      />
+      <RailTool
+        onClick={reset}
+        disabled={!interactive || shapeCount === 0}
+        icon="⟳"
+        label="Reset"
+      />
+    </>
+  );
+
+  /** Tool modifiers centered under the canvas (Gartic-style sub-controls). */
+  const bottomModifiers = (
+    <>
+      {tool === 'rect' && (
+        <ConstrainButton label="Square" constrain={constrain} interactive={interactive} onClick={() => setConstrain((c) => !c)} />
+      )}
+      {tool === 'brush' && (
+        <>
+          <div className="flex items-center gap-0.5 sm:gap-1 rounded-[3px] border-2 border-ink bg-papercard px-1 py-0.5 shrink-0">
+            {THICKNESS_PRESETS.map((t) => {
+              const active = thickness === t;
+              const dot = Math.max(6, Math.min(18, t * 0.28));
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  disabled={!interactive}
+                  onClick={() => setThickness(t)}
+                  aria-label={`Brush size ${t}`}
+                  aria-pressed={active}
+                  className={`w-8 h-8 sm:w-9 sm:h-9 grid place-items-center rounded-full border-2 border-ink transition disabled:opacity-40 ${
+                    active ? 'bg-grief' : 'bg-papercard hover:bg-paper2'
+                  }`}
+                >
+                  <span
+                    className={`rounded-full ${active ? 'bg-paper' : 'bg-ink'}`}
+                    style={{ width: dot, height: dot }}
+                  />
+                </button>
+              );
+            })}
+          </div>
+          <ConstrainButton label="Straight" constrain={constrain} interactive={interactive} onClick={() => setConstrain((c) => !c)} />
+        </>
+      )}
+      {tool === 'words' && (
+        <>
+          <div className="flex rounded-[3px] overflow-hidden border-2 border-ink text-xs shrink-0">
+            <button
+              type="button"
+              onClick={() => setGranularity('word')}
+              disabled={!interactive}
+              className={`px-2.5 sm:px-3 py-2 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 ${
+                granularity === 'word' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'
+              }`}
+            >
+              Words
+            </button>
+            <button
+              type="button"
+              onClick={() => setGranularity('letter')}
+              disabled={!interactive}
+              className={`px-2.5 sm:px-3 py-2 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 border-l-2 border-ink ${
+                granularity === 'letter' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'
+              }`}
+            >
+              Letters
+            </button>
+          </div>
+          {wordsStatus && (
+            <span className="hidden lg:inline text-[10px] leading-snug text-ink2 max-w-[14rem] truncate" title={wordsStatus}>
+              {wordsStatus}
+            </span>
+          )}
+          {(ocrState === 'error' || ocrState === 'empty') && (
+            <button type="button" onClick={retryOcr} disabled={!interactive} className="btn-secondary !px-2 !py-1.5 !text-xs shrink-0">
+              ↻ Retry
+            </button>
+          )}
+        </>
+      )}
+    </>
+  );
+
+  const zoomControl = (
+    <div className="flex rounded-[3px] overflow-hidden border-2 border-ink bg-papercard font-slab font-bold text-sm shrink-0">
+      <button type="button" onClick={() => zoomButton(1 / 1.25)} disabled={!loaded} className="h-9 w-8 sm:w-9 text-lg text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom out" aria-label="Zoom out">−</button>
+      <button type="button" onClick={resetView} disabled={!loaded} className="h-9 w-11 sm:w-12 text-ink2 hover:bg-paper2 disabled:opacity-40 tabular-nums border-x-2 border-ink text-[11px]" title="Reset to default (fit width)">{zoomPct}</button>
+      <button type="button" onClick={() => zoomButton(1.25)} disabled={!loaded} className="h-9 w-8 sm:w-9 text-lg text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom in" aria-label="Zoom in">+</button>
+    </div>
+  );
+
+  const helpPopover = helpOpen && (
+    <div
+      role="tooltip"
+      className="absolute z-20 left-1/2 -translate-x-1/2 bottom-full mb-2 w-[min(20rem,78vw)] card p-3 text-left shadow-clip text-xs leading-relaxed text-ink2"
+    >
+      <div className="kicker text-[10px] mb-1">Editor controls</div>
+      {controlsHint.split('\n').map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+    </div>
+  );
+
   return (
-    <div className="flex flex-col gap-3">
-      {/* Tool options stay directly beneath their parent control. View and
-          history actions form a distinct utility group on the right. */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
-        <div className="flex flex-col gap-2 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-[3px] overflow-hidden border-2 border-ink w-fit">
-              <ToolButton active={tool === 'rect'} onClick={() => setTool('rect')} disabled={!interactive} label="▭ Box" />
-              <ToolButton active={tool === 'brush'} onClick={() => setTool('brush')} disabled={!interactive} label="✎ Marker" />
-              <ToolButton active={tool === 'words'} onClick={() => setTool('words')} disabled={!interactive} label="🔤 Tap text" />
-              <ToolButton active={tool === 'eraser'} onClick={() => setTool('eraser')} disabled={!interactive} label="⌫ Eraser" />
-            </div>
-            {remaining != null && (
-              <span className={`h-10 px-3 inline-flex items-center justify-center rounded-[3px] border-2 border-ink font-slab font-bold uppercase tracking-wide text-sm whitespace-nowrap ${limitTone}`}>
-                {remaining} redaction{remaining === 1 ? '' : 's'} left
-              </span>
-            )}
+    <div className="flex flex-col h-full min-h-0 gap-1.5 sm:gap-2">
+      {/* Desktop: compact square tool palette · dominant canvas
+          Mobile: canvas on top, tool strip below */}
+      <div className="flex flex-1 min-h-0 gap-2 sm:gap-2.5">
+        {/* Left palette (md+) — Gartic 2-col square grid, vertically centered beside stage */}
+        <aside className="hidden md:flex flex-col justify-center gap-2 shrink-0 w-[8.75rem] lg:w-[9.75rem] self-stretch">
+          <div className="grid grid-cols-2 gap-2">
+            {renderTools()}
+            {undoResetTools}
           </div>
+          {remaining != null && (
+            <span className={`px-1.5 py-1 text-center rounded-[3px] border-2 border-ink font-slab font-bold uppercase tracking-wide text-[10px] leading-tight shrink-0 ${limitTone}`}>
+              {remaining} left
+            </span>
+          )}
+        </aside>
 
-          {tool === 'brush' && (
-            <ToolModifier anchorClassName="ml-[7.2rem]">
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="flex items-center gap-2 text-sm px-2.5 py-1.5 rounded-[3px] card-inset">
-                  <span className="whitespace-nowrap kicker text-[10px]">Brush size</span>
-                  <input type="range" min={MIN_THICKNESS} max={MAX_THICKNESS} value={thickness} disabled={!interactive} onChange={(e) => setThickness(Number(e.target.value))} className="accent-grief w-24 sm:w-28" />
-                  <span className="tabular-nums w-6 text-right font-semibold">{thickness}</span>
-                </label>
-                <ConstrainButton label="Straight brush" constrain={constrain} interactive={interactive} onClick={() => setConstrain((c) => !c)} />
+        {/* Center stage */}
+        <div
+          ref={containerRef}
+          className="relative flex-1 min-w-0 min-h-0 rounded-[3px] overflow-hidden bg-paper2 border-2 border-ink"
+          style={{ touchAction: 'none' }}
+        >
+          <canvas
+            ref={displayRef}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerLeave={clearBrushHover}
+            onPointerUp={endPointer}
+            onPointerCancel={endPointer}
+            className="block w-full h-full"
+            style={{ touchAction: 'none', cursor }}
+          />
+          {/* offscreen committed-scene cache (natural resolution) */}
+          <canvas ref={baseRef} className="hidden" />
+          {!loaded && (
+            <div className="absolute inset-0 grid place-items-center text-ink2 text-sm">Setting the type…</div>
+          )}
+          {submitted && (
+            <div className="absolute inset-0 grid place-items-center bg-paper/70 backdrop-blur-[1px]">
+              <div className="text-center">
+                <div className="stamp text-2xl animate-stamp-in">Submitted</div>
+                <div className="text-ink2 text-sm mt-3 italic">Sent to the desk — awaiting the reveal…</div>
               </div>
-            </ToolModifier>
-          )}
-
-          {tool === 'rect' && (
-            <ToolModifier anchorClassName="ml-[2.05rem]">
-              <ConstrainButton label="Perfect square" constrain={constrain} interactive={interactive} onClick={() => setConstrain((c) => !c)} />
-            </ToolModifier>
-          )}
-
-          {tool === 'words' && (
-            <ToolModifier anchorClassName="ml-[13.5rem]">
-              <div className="flex items-center gap-2 flex-wrap card-inset px-2 py-1.5 w-fit">
-                <div className="flex rounded-[3px] overflow-hidden border-2 border-ink text-sm">
-                  <button type="button" onClick={() => setGranularity('word')} disabled={!interactive} className={`px-2.5 py-1.5 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 ${granularity === 'word' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'}`}>Words</button>
-                  <button type="button" onClick={() => setGranularity('letter')} disabled={!interactive} className={`px-2.5 py-1.5 font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 border-l-2 border-ink ${granularity === 'letter' ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'}`}>Letters</button>
-                </div>
-                <span className="text-xs text-ink2 whitespace-nowrap">{wordsStatus}</span>
-                {(ocrState === 'error' || ocrState === 'empty') && (
-                  <button type="button" onClick={retryOcr} disabled={!interactive} className="btn-secondary !px-2 !py-1 text-xs whitespace-nowrap">
-                    ↻ Retry reader
-                  </button>
-                )}
-              </div>
-            </ToolModifier>
-          )}
-        </div>
-
-        <div className="flex flex-col items-end gap-2 ml-auto">
-          <div className="flex h-11 items-center rounded-[3px] overflow-hidden border-2 border-ink bg-papercard font-slab font-bold text-sm shadow-[2px_2px_0_rgba(26,26,26,0.18)]">
-            <button type="button" onClick={() => zoomButton(1 / 1.25)} disabled={!loaded} className="h-full w-10 text-lg text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom out" aria-label="Zoom out">−</button>
-            <button type="button" onClick={resetView} disabled={!loaded} className="h-full w-16 text-ink2 hover:bg-paper2 disabled:opacity-40 tabular-nums border-x-2 border-ink" title="Reset to default (fit width)">{zoomPct}</button>
-            <button type="button" onClick={() => zoomButton(1.25)} disabled={!loaded} className="h-full w-10 text-lg text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom in" aria-label="Zoom in">+</button>
-          </div>
-          <div className="flex items-center justify-end gap-2">
-            <button onClick={undo} disabled={!interactive || shapeCount === 0} className="btn-secondary !h-11 !py-0">↶ Undo</button>
-            <button onClick={reset} disabled={!interactive || shapeCount === 0} className="btn-secondary !h-11 !py-0">Reset</button>
-            <div className="relative">
-              <button type="button" onClick={() => setHelpOpen((open) => !open)} aria-expanded={helpOpen} aria-label="Editor controls help" className="btn-secondary !h-11 !py-0">ⓘ Help</button>
-              {helpOpen && <div role="tooltip" className="absolute z-20 right-0 top-12 w-[min(22rem,80vw)] card p-3 text-left shadow-clip text-xs leading-relaxed text-ink2"><div className="kicker text-[10px] mb-1">Editor controls</div>{controlsHint.split('\n').map((line) => <p key={line}>{line}</p>)}</div>}
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Canvas viewport — tall enough on desktop to show more of long screenshots;
-          responsive so phones stay usable without eating the whole chrome. */}
-      <div
-        ref={containerRef}
-        className="relative w-full rounded-[3px] overflow-hidden bg-paper2 border-2 border-ink h-[min(72dvh,720px)] sm:h-[min(78dvh,860px)]"
-        style={{ touchAction: 'none' }}
-      >
-        <canvas
-          ref={displayRef}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerLeave={clearBrushHover}
-          onPointerUp={endPointer}
-          onPointerCancel={endPointer}
-          className="block w-full h-full"
-          style={{ touchAction: 'none', cursor }}
-        />
-        {/* offscreen committed-scene cache (natural resolution) */}
-        <canvas ref={baseRef} className="hidden" />
-        {!loaded && (
-          <div className="absolute inset-0 grid place-items-center text-ink2 text-sm">Setting the type…</div>
-        )}
-        {submitted && (
-          <div className="absolute inset-0 grid place-items-center bg-paper/70 backdrop-blur-[1px]">
-            <div className="text-center">
-              <div className="stamp text-2xl animate-stamp-in">Submitted</div>
-              <div className="text-ink2 text-sm mt-3 italic">Sent to the desk — awaiting the reveal…</div>
-            </div>
-          </div>
+      {/* Mobile: primary tools + undo/reset always visible */}
+      <div className="md:hidden shrink-0 flex items-stretch gap-1.5">
+        <div className="grid grid-cols-6 flex-1 min-w-0 gap-1">
+          {renderTools()}
+          {undoResetTools}
+        </div>
+        {remaining != null && (
+          <span className={`shrink-0 px-2 inline-flex items-center rounded-[3px] border-2 border-ink font-slab font-bold uppercase tracking-wide text-[10px] ${limitTone}`}>
+            {remaining} left
+          </span>
         )}
       </div>
-      <p className="text-[11px] text-ink3 -mt-1">
-        Default view fits width (pan for the rest) · Scroll / pinch to zoom · Space or middle-drag to pan · {tool === 'eraser' ? 'tap a redaction to lift it' : tool === 'words' ? 'tap a word to hide/reveal · drag across several to hide' : 'hold Shift (or 📐) for straight lines & squares'}
-      </p>
 
-      {/* Submit */}
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-ink3">
-          {shapeCount} edit{shapeCount === 1 ? '' : 's'}{max != null ? ` · max ${max}` : ''}
-        </span>
-        <div className="flex-1" />
-        <button onClick={handleSubmit} disabled={!interactive} className="btn-primary">
+      {/* Bottom bar — sub-controls + zoom centered under canvas; Submit bottom-right */}
+      <div className="shrink-0 grid grid-cols-[1fr_auto] md:grid-cols-[8.75rem_1fr_auto] lg:grid-cols-[9.75rem_1fr_auto] items-center gap-x-2 sm:gap-x-2.5 gap-y-1.5 min-h-[2.75rem] pt-0.5 min-w-0">
+        {/* Spacer matching desktop palette width so center cluster sits under the stage */}
+        <div className="hidden md:block" aria-hidden="true" />
+
+        <div className="flex items-center justify-center gap-1.5 sm:gap-2 min-w-0 overflow-x-auto themed-scroll col-span-1 md:col-span-1">
+          {bottomModifiers}
+          {zoomControl}
+
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setHelpOpen((open) => !open)}
+              aria-expanded={helpOpen}
+              aria-label="Editor controls help"
+              className="btn-secondary !px-2 !py-1.5 !text-xs"
+            >
+              ⓘ
+            </button>
+            {helpPopover}
+          </div>
+
+          <span className="text-[11px] sm:text-xs text-ink3 tabular-nums whitespace-nowrap shrink-0 hidden sm:inline">
+            {shapeCount} edit{shapeCount === 1 ? '' : 's'}{max != null ? ` · max ${max}` : ''}
+          </span>
+        </div>
+
+        <button onClick={handleSubmit} disabled={!interactive} className="btn-primary !py-2 sm:!py-2.5 shrink-0 justify-self-end">
           {submitted ? 'Submitted ✓' : 'Submit →'}
         </button>
       </div>
@@ -1344,16 +1449,33 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   );
 }
 
-function ToolButton({ active, onClick, disabled, label }: { active: boolean; onClick: () => void; disabled?: boolean; label: string }) {
+/** Compact square palette button (Gartic-style 1:1 tile). */
+function RailTool({
+  active,
+  onClick,
+  disabled,
+  icon,
+  label,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  icon: string;
+  label: string;
+}) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`px-3 py-2 text-sm font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 border-ink [&:not(:first-child)]:border-l-2 ${
+      title={label}
+      aria-pressed={active}
+      className={`aspect-square w-full flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] sm:text-[11px] font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 rounded-[3px] border-2 border-ink leading-none ${
         active ? 'bg-grief text-paper' : 'bg-papercard text-ink hover:bg-paper2'
       }`}
     >
-      {label}
+      <span className="text-lg sm:text-xl leading-none" aria-hidden="true">{icon}</span>
+      <span className="text-center leading-tight max-w-full truncate px-0.5">{label}</span>
     </button>
   );
 }
@@ -1365,7 +1487,7 @@ function ConstrainButton({ label, constrain, interactive, onClick }: { label: st
       onClick={onClick}
       disabled={!interactive}
       aria-pressed={constrain}
-      className={`px-3 py-2 text-sm font-slab font-bold uppercase tracking-wide rounded-[3px] border-2 border-ink transition-colors disabled:opacity-40 ${
+      className={`shrink-0 px-2.5 py-2 text-xs font-slab font-bold uppercase tracking-wide rounded-[3px] border-2 border-ink transition-colors disabled:opacity-40 whitespace-nowrap ${
         constrain ? 'bg-ink text-paper' : 'bg-papercard text-ink hover:bg-paper2'
       }`}
     >
@@ -1392,16 +1514,4 @@ function drawBrushHover(ctx: CanvasRenderingContext2D, p: Point, thickness: numb
   ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
-}
-
-/** A real branch from the selected tool to its contextual controls. The anchor
-    offsets match the fixed tool-button group above (Box, Marker, Tap Text). */
-function ToolModifier({ anchorClassName, children }: { anchorClassName: string; children: ReactNode }) {
-  return (
-    <div className={`relative w-fit pt-2 ${anchorClassName}`}>
-      <span className="absolute left-0 -top-2 h-4 border-l-2 border-ink" aria-hidden="true" />
-      <span className="absolute left-0 top-2 w-4 border-t-2 border-ink" aria-hidden="true" />
-      <div className="pl-4">{children}</div>
-    </div>
-  );
 }
