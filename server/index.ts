@@ -295,6 +295,9 @@ function handle(ws: WebSocket, msg: ClientMessage) {
     case 'castVote':
       withPlayer(ws, (code, pid) => store.castVote(code, pid, msg.submissionId));
       break;
+    case 'react':
+      withPlayer(ws, (code, pid) => store.react(code, pid, msg.submissionId, msg.emoji));
+      break;
     case 'nextRound':
       // Reveal → scoreboard. Host then uses returnToLobby ("Play Again") to stage
       // a new upload before Start Editing — never auto-start from scoreboard.

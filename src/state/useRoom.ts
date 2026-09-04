@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { RoomState, RoundRecap, RoundSettings, ServerMessage } from '@shared/types';
+import type {
+  RoomState,
+  RoundRecap,
+  RoundSettings,
+  ServerMessage,
+  VerdictReactionEmoji,
+} from '@shared/types';
 import type { ConnectionStatus, Transport } from '../transport/Transport';
 import { WebSocketTransport } from '../transport/WebSocketTransport';
 import { syncRoomUrl } from '../lib/roomUrl';
@@ -75,6 +81,7 @@ export interface RoomApi {
   beginVoting: () => void;
   forceReveal: () => void;
   castVote: (submissionId: string) => void;
+  react: (submissionId: string, emoji: VerdictReactionEmoji) => void;
   showScoreboard: () => void;
   returnToLobby: () => void;
 }
@@ -237,6 +244,10 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
   const beginVoting = useCallback(() => send({ type: 'beginVoting' }), [send]);
   const forceReveal = useCallback(() => send({ type: 'forceReveal' }), [send]);
   const castVote = useCallback((submissionId: string) => send({ type: 'castVote', submissionId }), [send]);
+  const react = useCallback(
+    (submissionId: string, emoji: VerdictReactionEmoji) => send({ type: 'react', submissionId, emoji }),
+    [send],
+  );
   const showScoreboard = useCallback(() => send({ type: 'nextRound' }), [send]);
   const returnToLobby = useCallback(() => send({ type: 'returnToLobby' }), [send]);
 
@@ -269,6 +280,7 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
     beginVoting,
     forceReveal,
     castVote,
+    react,
     showScoreboard,
     returnToLobby,
   };

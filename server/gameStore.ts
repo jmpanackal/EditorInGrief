@@ -17,6 +17,7 @@ import {
   COUNTDOWN_SECONDS,
   DEFAULT_MAX_PLAYERS,
   TIMER_NORMAL_SECONDS,
+  VERDICT_REACTION_EMOJIS,
   clampCustomTimerSeconds,
   clampMaxPlayers,
   resolveRoundTimerSeconds,
@@ -472,6 +473,7 @@ export class GameStore {
       revealIndex: 0,
       votingEnabled: room.state.votingEnabled,
       votes: {},
+      reactions: {},
     };
 
     room.state.currentRound = round;
@@ -562,6 +564,28 @@ export class GameStore {
       const s = round.submissions.find((x) => x.id === chosen);
       if (s) s.votesCount += 1;
     }
+    this.broadcast(room.state.code);
+  }
+
+  /** Scoreboard: toggle an emoji reaction on a filed edit (synced). */
+  react(
+    code: string,
+    playerId: string,
+    submissionId: string,
+    emoji: string,
+  ): void {
+    const room = this.requireRoom(code);
+    const round = room.state.currentRound;
+    if (!round || room.state.phase !== 'scoreboard') return;
+    if (!(VERDICT_REACTION_EMOJIS as readonly string[]).includes(emoji)) return;
+    if (!round.submissions.some((s) => s.id === submissionId)) return;
+    if (!round.reactions) round.reactions = {};
+    const byEmoji = round.reactions[submissionId] ?? (round.reactions[submissionId] = {});
+    const list = byEmoji[emoji] ?? (byEmoji[emoji] = []);
+    const idx = list.indexOf(playerId);
+    if (idx >= 0) list.splice(idx, 1);
+    else list.push(playerId);
+    if (list.length === 0) delete byEmoji[emoji];
     this.broadcast(room.state.code);
   }
 

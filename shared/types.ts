@@ -67,7 +67,16 @@ export interface Round {
   revealIndex: number; // which submission is currently shown at reveal
   votingEnabled: boolean;
   votes: Record<string, string>; // voterPlayerId -> submissionId
+  /**
+   * Scoreboard emoji reactions: submissionId → emoji → playerIds who reacted.
+   * Lightweight crowd signal while waiting on Play again (synced to all clients).
+   */
+  reactions: Record<string, Record<string, string[]>>;
 }
+
+/** Allowed Verdict reaction emojis (scoreboard). */
+export const VERDICT_REACTION_EMOJIS = ['😂', '🔥', '💀', '👏'] as const;
+export type VerdictReactionEmoji = (typeof VERDICT_REACTION_EMOJIS)[number];
 
 /**
  * Host-configurable settings for the NEXT round(s). Persisted at the room level
@@ -200,6 +209,7 @@ export type ClientMessage =
   | { type: 'beginVoting' } // host only; reveal -> ballot when voting is enabled
   | { type: 'forceReveal' } // host only; skip waiting (e.g. AFK during untimed)
   | { type: 'castVote'; submissionId: string } // when voting enabled
+  | { type: 'react'; submissionId: string; emoji: VerdictReactionEmoji } // scoreboard toggle
   | { type: 'nextRound' } // host only; ballot/reveal -> scoreboard (tallies votes)
   | { type: 'returnToLobby' }; // host only; scoreboard/any -> lobby (fresh upload window)
 
@@ -311,6 +321,15 @@ export function timerModeLabel(mode: TimerMode): string {
     case 'custom':
       return 'Custom';
   }
+}
+
+/** Compact duration for round toast (e.g. "30s", "2m", "No limit"). */
+export function formatRoundDuration(seconds: number, untimed: boolean): string {
+  if (untimed || seconds <= 0) return 'No limit';
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s === 0 ? `${m}m` : `${m}m ${s}s`;
 }
 
 export const WS_PORT = 8787;

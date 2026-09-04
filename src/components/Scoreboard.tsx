@@ -1,9 +1,16 @@
-import type { Player, Submission } from '../../shared/types';
 import type { RoomApi } from '../state/useRoom';
 import { PlayerList } from './PlayerList';
 import { RoomInvite } from './RoomInvite';
 import { RoundDownload } from './Recap';
 import { ExpandableImage } from './ExpandableImage';
+import {
+  formatRoundDuration,
+  timerModeLabel,
+  VERDICT_REACTION_EMOJIS,
+  type Player,
+  type Submission,
+  type VerdictReactionEmoji,
+} from '../../shared/types';
 
 export function Scoreboard({ room }: { room: RoomApi }) {
   const state = room.state!;
@@ -18,6 +25,34 @@ export function Scoreboard({ room }: { room: RoomApi }) {
     room.history.length > 0
       ? room.history[room.history.length - 1]
       : null;
+
+  const filed = results.length;
+  const durationLabel = round
+    ? formatRoundDuration(round.timerSeconds, round.untimed)
+    : null;
+  const modeLabel = round
+    ? round.untimed
+      ? 'No limit'
+      : timerModeLabel(round.timerMode)
+    : null;
+
+  const winner =
+    voting && topVotes > 0
+      ? results.find((s) => s.votesCount === topVotes)
+      : undefined;
+  const winnerNick = winner
+    ? state.players.find((p) => p.id === winner.playerId)?.nickname
+    : undefined;
+
+  const toastParts = [
+    `${filed} filed`,
+    voting ? 'voting on' : 'voting off',
+    modeLabel && durationLabel
+      ? round?.untimed
+        ? modeLabel
+        : `${modeLabel} · ${durationLabel}`
+      : null,
+  ].filter(Boolean);
 
   return (
     <div className="grid gap-4 md:grid-cols-[300px_1fr] md:flex-1 md:min-h-0 animate-fade-up">
@@ -45,7 +80,7 @@ export function Scoreboard({ room }: { room: RoomApi }) {
 
       {/* The Verdict — sole main content: this round’s gallery + download + CTAs. */}
       <div className="order-1 md:order-2 card p-5 flex flex-col md:min-h-0 md:overflow-hidden">
-        <div className="flex items-start justify-between gap-3 mb-4 flex-wrap shrink-0">
+        <div className="flex items-start justify-between gap-3 mb-3 flex-wrap shrink-0">
           <div className="text-center flex-1 min-w-[12rem]">
             <div className="kicker text-[11px] flex items-center justify-center gap-2">
               <span className="hr-thin flex-1" /> The Verdict <span className="hr-thin flex-1" />
@@ -57,6 +92,16 @@ export function Scoreboard({ room }: { room: RoomApi }) {
           {latestRecap && <RoundDownload recap={latestRecap} code={state.code} />}
         </div>
 
+        {/* One-line round toast + optional silly award */}
+        <div className="shrink-0 mb-4 rounded-[3px] border border-ink/20 bg-paper2/80 px-3 py-2 text-center">
+          <p className="text-sm text-ink2 font-slab">{toastParts.join(' · ')}</p>
+          {winnerNick && (
+            <p className="mt-1 font-display font-black text-grief text-sm sm:text-base">
+              Crowd favorite: {winnerNick}
+            </p>
+          )}
+        </div>
+
         {!round || !state.currentSource ? (
           <div className="text-ink3 py-6 text-center italic">No copy filed this round.</div>
         ) : (
@@ -66,6 +111,9 @@ export function Scoreboard({ room }: { room: RoomApi }) {
             players={state.players}
             voting={voting}
             topVotes={topVotes}
+            reactions={round.reactions ?? {}}
+            meId={room.playerId}
+            onReact={room.react}
           />
         )}
 
@@ -103,12 +151,18 @@ function VerdictGallery({
   players,
   voting,
   topVotes,
+  reactions,
+  meId,
+  onReact,
 }: {
   originalSrc: string;
   results: Submission[];
   players: Player[];
   voting: boolean;
   topVotes: number;
+  reactions: Record<string, Record<string, string[]>>;
+  meId: string | null;
+  onReact: (submissionId: string, emoji: VerdictReactionEmoji) => void;
 }) {
   const playerItems: VerdictItem[] = results.map((s) => {
     const p = players.find((pl) => pl.id === s.playerId);
@@ -123,11 +177,16 @@ function VerdictGallery({
     };
   });
 
+  const singleEdit = playerItems.length === 1;
+
   return (
     <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-4">
-      {/* Original on its own full-width row — never a sibling in the edits grid. */}
-      <div className="w-full flex justify-center shrink-0" data-verdict="original">
-        <div className="w-full max-w-xl">
+      {/* Single submission: wide before/after row fills Verdict width. */}
+      {singleEdit && (
+        <div
+          className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 items-start"
+          data-verdict="before-after"
+        >
           <VerdictClip
             src={originalSrc}
             alt="Original source image"
@@ -135,26 +194,50 @@ function VerdictGallery({
             dashed
             featured
           />
-        </div>
-      </div>
-
-      {/* Edits-only grid — starts on the row below Original. */}
-      {playerItems.length === 1 && (
-        <div className="w-full flex justify-center" data-verdict="edits">
-          <div className="w-full max-w-xl">
-            <VerdictClip key={playerItems[0].id} {...playerItems[0]} />
-          </div>
+          <VerdictClip
+            key={playerItems[0].id}
+            {...playerItems[0]}
+            submissionId={playerItems[0].id}
+            reactionMap={reactions[playerItems[0].id]}
+            meId={meId}
+            onReact={onReact}
+          />
         </div>
       )}
-      {playerItems.length >= 2 && (
-        <div
-          className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 content-start items-start [&>*:last-child:nth-child(odd)]:sm:col-span-2 [&>*:last-child:nth-child(odd)]:sm:max-w-[calc(50%-0.375rem)] [&>*:last-child:nth-child(odd)]:sm:justify-self-center"
-          data-verdict="edits"
-        >
-          {playerItems.map((item) => (
-            <VerdictClip key={item.id} {...item} />
-          ))}
-        </div>
+
+      {/* Multi: Original alone on top, edits in 2-col below. */}
+      {!singleEdit && (
+        <>
+          <div className="w-full flex justify-center shrink-0" data-verdict="original">
+            <div className="w-full max-w-2xl">
+              <VerdictClip
+                src={originalSrc}
+                alt="Original source image"
+                label="Original"
+                dashed
+                featured
+              />
+            </div>
+          </div>
+
+          {playerItems.length >= 2 && (
+            <div
+              className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 content-start items-start [&>*:last-child:nth-child(odd)]:sm:col-span-2 [&>*:last-child:nth-child(odd)]:sm:max-w-[calc(50%-0.375rem)] [&>*:last-child:nth-child(odd)]:sm:justify-self-center"
+              data-verdict="edits"
+            >
+              {playerItems.map((item) => (
+                <VerdictClip
+                  key={item.id}
+                  {...item}
+                  submissionId={item.id}
+                  reactionMap={reactions[item.id]}
+                  meId={meId}
+                  onReact={onReact}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -168,7 +251,18 @@ function VerdictClip({
   isWinner = false,
   dashed = false,
   featured = false,
-}: Omit<VerdictItem, 'id'>) {
+  submissionId,
+  reactionMap,
+  meId,
+  onReact,
+}: Omit<VerdictItem, 'id'> & {
+  submissionId?: string;
+  reactionMap?: Record<string, string[]>;
+  meId?: string | null;
+  onReact?: (submissionId: string, emoji: VerdictReactionEmoji) => void;
+}) {
+  const showReactions = !!submissionId && !!onReact && !featured;
+
   return (
     <div
       className={`relative rounded-[3px] overflow-hidden bg-papercard min-w-0 ${
@@ -220,6 +314,34 @@ function VerdictClip({
           </span>
         )}
       </div>
+      {showReactions && (
+        <div className="flex flex-wrap items-center justify-center gap-1.5 px-2 py-2 border-t border-ink/15 bg-paper2/60">
+          {VERDICT_REACTION_EMOJIS.map((emoji) => {
+            const reactors = reactionMap?.[emoji] ?? [];
+            const count = reactors.length;
+            const mine = !!meId && reactors.includes(meId);
+            return (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => onReact!(submissionId!, emoji)}
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-base transition-colors ${
+                  mine
+                    ? 'border-grief bg-grief/10 shadow-sm'
+                    : 'border-ink/20 bg-papercard hover:border-ink/50'
+                }`}
+                aria-label={`React ${emoji}`}
+                aria-pressed={mine}
+              >
+                <span aria-hidden>{emoji}</span>
+                {count > 0 && (
+                  <span className="tabular-nums text-xs font-bold text-ink2">{count}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
