@@ -63,8 +63,8 @@ export interface RoomApi {
   /** Per-round recaps accumulated across this session (for the end-of-game recap + export). */
   history: RoundRecap[];
 
-  createRoom: (nickname: string) => void;
-  joinRoom: (code: string, nickname: string) => void;
+  createRoom: (nickname: string, avatarId?: string) => void;
+  joinRoom: (code: string, nickname: string, avatarId?: string) => void;
   leave: () => void;
   removePlayer: (playerId: string) => void;
 
@@ -190,14 +190,14 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
     transportRef.current?.send(msg);
   }, []);
 
-  const createRoom = useCallback((nickname: string) => {
+  const createRoom = useCallback((nickname: string, avatarId?: string) => {
     if (requestPending.current) return;
     requestPending.current = true;
     pendingNick.current = nickname;
-    send({ type: 'createRoom', nickname });
+    send({ type: 'createRoom', nickname, avatarId });
   }, [send]);
 
-  const joinRoom = useCallback((code: string, nickname: string) => {
+  const joinRoom = useCallback((code: string, nickname: string, avatarId?: string) => {
     if (requestPending.current) return;
     requestPending.current = true;
     pendingNick.current = nickname;
@@ -208,7 +208,7 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
     if (existing?.code === normalizedCode) {
       send({ type: 'rejoin', code: existing.code, playerId: existing.playerId });
     } else {
-      send({ type: 'joinRoom', code: normalizedCode, nickname });
+      send({ type: 'joinRoom', code: normalizedCode, nickname, avatarId });
     }
   }, [send]);
 

@@ -7,6 +7,31 @@ interface Props {
   onExpire?: () => void;
 }
 
+/** Synthesize a short oscillator beep. No-ops if AudioContext is unavailable
+ * or the browser blocks autoplay (needs a prior user gesture). */
+function playTone(opts: { freq: number; durationSec: number; peakGain?: number; type?: OscillatorType }) {
+  try {
+    const AudioCtx = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = opts.type ?? 'sine';
+    osc.frequency.value = opts.freq;
+    const peak = opts.peakGain ?? 0.07;
+    const end = opts.durationSec;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(peak, ctx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + end);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + end + 0.01);
+    osc.onended = () => void ctx.close();
+  } catch {
+    // Sound is a helpful enhancement, never a reason to disrupt the timer.
+  }
+}
+
 /** A synced countdown. Each device derives remaining time from the shared
  * round start time (+ a clock-skew correction), so nobody is ahead.
  * Compact horizontal deadline bar — readable length cue without stealing
@@ -15,12 +40,17 @@ export function Countdown({ startedAt, durationSeconds, clockOffsetMs, onExpire 
   const [remaining, setRemaining] = useState(durationSeconds);
   const firedRef = useRef(false);
   const lastBeepRef = useRef<number | null>(null);
+  const midWarnPlayedRef = useRef(false);
+  const prevRemainingRef = useRef<number | null>(null);
   // Keep latest onExpire without resetting the fire latch when the callback identity changes.
   const onExpireRef = useRef(onExpire);
   onExpireRef.current = onExpire;
 
   useEffect(() => {
     firedRef.current = false;
+    lastBeepRef.current = null;
+    midWarnPlayedRef.current = false;
+    prevRemainingRef.current = null;
     const tick = () => {
       const now = Date.now() + clockOffsetMs;
       const elapsed = (now - startedAt) / 1000;
@@ -59,28 +89,22 @@ export function Countdown({ startedAt, durationSeconds, clockOffsetMs, onExpire 
   const warn = remaining <= 30 && !danger;
   const label = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 
-  // A tiny generated beep keeps the bundle asset-free. Browsers only permit
-  // sound after a user gesture; when they decline it, this harmlessly no-ops.
+  // Single mid-round chime when the clock crosses 30s remaining.
+  useEffect(() => {
+    const prev = prevRemainingRef.current;
+    prevRemainingRef.current = remaining;
+    if (midWarnPlayedRef.current || prev === null) return;
+    if (!(prev > 30 && remaining <= 30 && remaining > 0)) return;
+    midWarnPlayedRef.current = true;
+    // Lower, longer triangle chime — distinct from the rapid sine ticks in the last 10s.
+    playTone({ freq: 392, durationSec: 0.28, peakGain: 0.09, type: 'triangle' });
+  }, [remaining]);
+
+  // Rapid per-second ticks in the final 10 seconds.
   useEffect(() => {
     if (!danger || secs <= 0 || secs === lastBeepRef.current) return;
     lastBeepRef.current = secs;
-    try {
-      const AudioCtx = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = secs <= 5 ? 880 : 660;
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.07, ctx.currentTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.10);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.11);
-      osc.onended = () => void ctx.close();
-    } catch {
-      // Sound is a helpful enhancement, never a reason to disrupt the timer.
-    }
+    playTone({ freq: secs <= 5 ? 880 : 660, durationSec: 0.1 });
   }, [danger, secs]);
 
   return (

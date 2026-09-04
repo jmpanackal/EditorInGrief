@@ -455,6 +455,13 @@ function drawUnderlines(ctx: CanvasRenderingContext2D, boxes: KeyedBox[], redact
   ctx.restore();
 }
 
+/** Tightest OCR box under a point (word or letter, depending on keyed list). */
+function tightestBoxAt(p: Point, boxes: KeyedBox[], pad = 2): KeyedBox | null {
+  const hits = boxes.filter((b) => pointInBox(p, b, pad));
+  if (!hits.length) return null;
+  return hits.reduce((a, b) => (boxArea(b) < boxArea(a) ? b : a));
+}
+
 /** Highlight the boxes currently under a tap/drag selection (pre-commit). */
 function drawSelectionBoxes(
   ctx: CanvasRenderingContext2D,
@@ -479,6 +486,28 @@ function drawSelectionBoxes(
     ctx.fillRect(b.x0, b.y0, w, h);
     ctx.strokeRect(b.x0, b.y0, w, h);
   }
+  ctx.restore();
+}
+
+/**
+ * Desktop Text-tool feedforward: ink/grief wash over the word or letter that
+ * a click would redact (or uncover). Skipped on touch — no persistent hover.
+ */
+function drawWordHoverPreview(ctx: CanvasRenderingContext2D, box: OcrBox, scale: number): void {
+  const w = box.x1 - box.x0;
+  const h = box.y1 - box.y0;
+  const dash = [4 / scale, 3 / scale];
+  ctx.save();
+  ctx.fillStyle = 'rgba(196, 30, 30, 0.22)';
+  ctx.fillRect(box.x0, box.y0, w, h);
+  ctx.setLineDash([]);
+  ctx.lineWidth = 1.8 / scale;
+  ctx.strokeStyle = 'rgba(26, 26, 26, 0.55)';
+  ctx.strokeRect(box.x0, box.y0, w, h);
+  ctx.setLineDash(dash);
+  ctx.lineWidth = 1.2 / scale;
+  ctx.strokeStyle = 'rgba(196, 30, 30, 0.95)';
+  ctx.strokeRect(box.x0, box.y0, w, h);
   ctx.restore();
 }
 
@@ -556,6 +585,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
   const brushHoverRef = useRef<Point | null>(null);
   /** Index into shapesRef for Uncover desktop hover peek; -1 = none. */
   const uncoverHoverIdxRef = useRef(-1);
+  /** Desktop Text-tool hover target (word/letter that click would hit). */
+  const wordHoverBoxRef = useRef<KeyedBox | null>(null);
 
   // Dismiss help when tapping/clicking outside the ⓘ control + popover.
   useEffect(() => {
@@ -726,6 +757,13 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
     // Live tap/drag word selection preview (before it commits to shapes).
     if (wordSelBoxesRef.current.length || wordSelRectRef.current) {
       drawSelectionBoxes(ctx, wordSelBoxesRef.current, wordSelRectRef.current, scale);
+    } else if (
+      toolRef.current === 'words' &&
+      wordHoverBoxRef.current &&
+      !wordSelStartRef.current
+    ) {
+      // Desktop hover preview — only when not mid-drag select.
+      drawWordHoverPreview(ctx, wordHoverBoxRef.current, scale);
     }
     // Display-only Marker cursor ring — never written to the editing canvas.
     if (toolRef.current === 'brush' && brushHoverRef.current && !drawingRef.current) {
@@ -1158,9 +1196,12 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
 
   // Redraw the canvas overlays when the tool or granularity changes (so the
   // underline affordances appear/disappear and switch word<->letter promptly).
-  // Redraw when tool/granularity changes; clear Uncover hover when leaving that tool.
+  // Redraw when tool/granularity changes; clear tool-specific hover feedforward.
   useEffect(() => {
     if (tool !== 'eraser') uncoverHoverIdxRef.current = -1;
+    if (tool !== 'brush') brushHoverRef.current = null;
+    // Always drop Text hover on tool/granularity change (letter vs word boxes differ).
+    wordHoverBoxRef.current = null;
     renderDisplay();
   }, [tool, granularity, renderDisplay]);
 
@@ -1192,8 +1233,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
       wordDraggedRef.current = true;
       wordSelBoxesRef.current = collectBoxes().filter((b) => boxIntersectsRect(b, r));
     } else {
-      const hits = collectBoxes().filter((b) => pointInBox(start, b, 2));
-      wordSelBoxesRef.current = hits.length ? [hits.reduce((a, b) => (boxArea(b) < boxArea(a) ? b : a))] : [];
+      const hit = tightestBoxAt(start, collectBoxes());
+      wordSelBoxesRef.current = hit ? [hit] : [];
     }
     renderDisplay();
   }, [collectBoxes, renderDisplay]);
@@ -1226,10 +1267,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
     // redacted, reveal it (remove that shape); otherwise hide it.
     if (!dragged) {
       let box = selected[0];
-      if (!box && start) {
-        const hits = collectBoxes().filter((b) => pointInBox(start, b, 2));
-        if (hits.length) box = hits.reduce((a, b) => (boxArea(b) < boxArea(a) ? b : a));
-      }
+      if (!box && start) box = tightestBoxAt(start, collectBoxes()) ?? undefined;
       if (!box) { renderDisplay(); return; }
 
       const existingIdx = shapesRef.current.findIndex((s) => s.type === 'rect' && s.ocrKey === box!.key);
@@ -1331,23 +1369,39 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
       const point = toImage(e.clientX, e.clientY, false);
       const img = imgRef.current;
       const inImage = !!img && point.x >= 0 && point.y >= 0 && point.x <= img.naturalWidth && point.y <= img.naturalHeight;
+      let needRedraw = false;
 
       if (toolRef.current === 'brush') {
         brushHoverRef.current = inImage ? point : null;
         if (uncoverHoverIdxRef.current !== -1) uncoverHoverIdxRef.current = -1;
-        renderDisplay();
+        if (wordHoverBoxRef.current) wordHoverBoxRef.current = null;
+        needRedraw = true;
       } else if (toolRef.current === 'eraser') {
         brushHoverRef.current = null;
+        if (wordHoverBoxRef.current) wordHoverBoxRef.current = null;
         const next = inImage ? topShapeIndexAt(shapesRef.current, point) : -1;
         if (next !== uncoverHoverIdxRef.current) {
           uncoverHoverIdxRef.current = next;
-          renderDisplay();
+          needRedraw = true;
         }
-      } else if (brushHoverRef.current || uncoverHoverIdxRef.current !== -1) {
+      } else if (toolRef.current === 'words' && !wordSelStartRef.current) {
+        brushHoverRef.current = null;
+        if (uncoverHoverIdxRef.current !== -1) uncoverHoverIdxRef.current = -1;
+        const next = inImage
+          ? tightestBoxAt(point, keyedBoxesFor(ocrWordsRef.current, granularityRef.current))
+          : null;
+        const prev = wordHoverBoxRef.current;
+        if ((prev?.key ?? null) !== (next?.key ?? null)) {
+          wordHoverBoxRef.current = next;
+          needRedraw = true;
+        }
+      } else if (brushHoverRef.current || uncoverHoverIdxRef.current !== -1 || wordHoverBoxRef.current) {
         brushHoverRef.current = null;
         uncoverHoverIdxRef.current = -1;
-        renderDisplay();
+        wordHoverBoxRef.current = null;
+        needRedraw = true;
       }
+      if (needRedraw) renderDisplay();
     }
     if (!pointersRef.current.has(e.pointerId)) return;
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1364,9 +1418,11 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
   const clearToolHover = useCallback(() => {
     const hadBrush = !!brushHoverRef.current;
     const hadUncover = uncoverHoverIdxRef.current !== -1;
-    if (!hadBrush && !hadUncover) return;
+    const hadWord = !!wordHoverBoxRef.current;
+    if (!hadBrush && !hadUncover && !hadWord) return;
     brushHoverRef.current = null;
     uncoverHoverIdxRef.current = -1;
+    wordHoverBoxRef.current = null;
     renderDisplay();
   }, [renderDisplay]);
 
@@ -1567,7 +1623,11 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
       ? 'grab'
       : tool === 'eraser'
         ? 'cell'
-        : 'crosshair';
+        : tool === 'brush'
+          ? 'default'
+          : tool === 'words'
+            ? 'pointer'
+            : 'crosshair';
 
   const wordsTipLeft =
     ocrState === 'loading' ? 'Detecting…'
@@ -1692,7 +1752,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
   );
 
   /** Tool modifiers (Gartic-style sub-controls) — centered core, balanced side rails. */
-  const bottomModifiers = (
+  const toolModifiers = (
     <>
       {tool === 'rect' && (
         <ModifierRow
@@ -1757,9 +1817,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
 
   return (
     <div className="flex flex-col h-full min-h-0 gap-1.5 sm:gap-2">
-      {/* Mobile: tools + modifiers ABOVE the image so controls are found first.
-          Desktop: left palette beside canvas (unchanged). */}
-      <div className="md:hidden shrink-0 flex flex-col gap-1.5">
+      {/* Tools + modifiers ABOVE the canvas on all breakpoints (Edit layout #1). */}
+      <div className="shrink-0 flex flex-col gap-1.5">
         <div className="flex items-stretch gap-1.5">
           <div className="grid grid-cols-6 flex-1 min-w-0 gap-1">
             {renderTools()}
@@ -1772,79 +1831,59 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
           )}
         </div>
         <div className="w-full min-w-0">
-          {bottomModifiers}
+          {toolModifiers}
         </div>
       </div>
 
-      <div className="flex flex-1 min-h-0 gap-2 sm:gap-2.5">
-        {/* Left palette (md+) — Gartic 2-col square grid, vertically centered beside stage */}
-        <aside className="hidden md:flex flex-col justify-center gap-2 shrink-0 w-[8.75rem] lg:w-[9.75rem] self-stretch">
-          <div className="grid grid-cols-2 gap-2">
-            {renderTools()}
-            {undoResetTools}
+      {/* Full-width image stage */}
+      <div
+        ref={containerRef}
+        className="relative flex-1 min-w-0 min-h-0 rounded-[3px] overflow-hidden bg-paper2 border-2 border-ink"
+        style={{ touchAction: 'none' }}
+      >
+        <canvas
+          ref={displayRef}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerLeave={clearToolHover}
+          onPointerUp={endPointer}
+          onPointerCancel={endPointer}
+          className="block w-full h-full"
+          style={{ touchAction: 'none', cursor }}
+        />
+        {/* offscreen committed-scene cache (natural resolution) */}
+        <canvas ref={baseRef} className="hidden" />
+        {!loaded && (
+          <div className="absolute inset-0 grid place-items-center text-ink2 text-sm">Setting the type…</div>
+        )}
+        {tool === 'words' && ocrState === 'loading' && (
+          <div
+            className="absolute inset-0 z-10 grid place-items-center pointer-events-none"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[3px] border-2 border-ink bg-papercard/90 shadow-clip">
+              <span
+                className="inline-block w-5 h-5 shrink-0 rounded-full border-2 border-ink/25 border-t-grief animate-spin"
+                aria-hidden="true"
+              />
+              <span className="font-slab font-bold uppercase tracking-wide text-sm text-ink">Detecting text…</span>
+            </div>
           </div>
-          {remaining != null && (
-            <span className={`px-1.5 py-1 text-center rounded-[3px] border-2 border-ink font-slab font-bold uppercase tracking-wide text-[10px] leading-tight shrink-0 ${limitTone}`}>
-              {remaining} left
-            </span>
-          )}
-        </aside>
-
-        {/* Center stage */}
-        <div
-          ref={containerRef}
-          className="relative flex-1 min-w-0 min-h-0 rounded-[3px] overflow-hidden bg-paper2 border-2 border-ink"
-          style={{ touchAction: 'none' }}
-        >
-          <canvas
-            ref={displayRef}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerLeave={clearToolHover}
-            onPointerUp={endPointer}
-            onPointerCancel={endPointer}
-            className="block w-full h-full"
-            style={{ touchAction: 'none', cursor }}
-          />
-          {/* offscreen committed-scene cache (natural resolution) */}
-          <canvas ref={baseRef} className="hidden" />
-          {!loaded && (
-            <div className="absolute inset-0 grid place-items-center text-ink2 text-sm">Setting the type…</div>
-          )}
-          {tool === 'words' && ocrState === 'loading' && (
-            <div
-              className="absolute inset-0 z-10 grid place-items-center pointer-events-none"
-              aria-live="polite"
-              aria-busy="true"
-            >
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[3px] border-2 border-ink bg-papercard/90 shadow-clip">
-                <span
-                  className="inline-block w-5 h-5 shrink-0 rounded-full border-2 border-ink/25 border-t-grief animate-spin"
-                  aria-hidden="true"
-                />
-                <span className="font-slab font-bold uppercase tracking-wide text-sm text-ink">Detecting text…</span>
-              </div>
+        )}
+        {submitted && (
+          <div className="absolute inset-0 grid place-items-center bg-paper/70 backdrop-blur-[1px]">
+            <div className="text-center">
+              <div className="stamp text-2xl animate-stamp-in">Ready</div>
+              <div className="text-ink2 text-sm mt-3 italic">Waiting for everyone — tap Unready to keep editing</div>
             </div>
-          )}
-          {submitted && (
-            <div className="absolute inset-0 grid place-items-center bg-paper/70 backdrop-blur-[1px]">
-              <div className="text-center">
-                <div className="stamp text-2xl animate-stamp-in">Ready</div>
-                <div className="text-ink2 text-sm mt-3 italic">Waiting for everyone — tap Unready to keep editing</div>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Bottom bar — desktop modifiers under canvas; mobile: zoom + Ready only */}
-      <div className="shrink-0 grid grid-cols-[1fr_auto] md:grid-cols-[8.75rem_1fr_auto] lg:grid-cols-[9.75rem_1fr_auto] items-center gap-x-2 sm:gap-x-2.5 gap-y-1.5 min-h-[2.75rem] pt-0.5 min-w-0">
-        <div className="hidden md:block" aria-hidden="true" />
-
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 w-full col-span-1 md:col-span-1">
-          <div className="hidden md:block flex-1 min-w-0">
-            {bottomModifiers}
-          </div>
+      {/* Ready / zoom footer */}
+      <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 min-h-[2.75rem] pt-0.5 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
           {zoomControl}
 
           <div ref={helpWrapRef} className="relative shrink-0">
@@ -1869,7 +1908,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
           type="button"
           onClick={toggleReady}
           disabled={!canToggleReady}
-          className={`!py-2 sm:!py-2.5 shrink-0 justify-self-end ${submitted ? 'btn-secondary' : 'btn-primary'}`}
+          className={`!py-2 sm:!py-2.5 shrink-0 ${submitted ? 'btn-secondary' : 'btn-primary'}`}
         >
           {submitted ? 'Unready' : 'Ready →'}
         </button>
@@ -1878,7 +1917,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
   );
 }
 
-/** Compact square palette button (Gartic-style 1:1 tile). */
+/** Compact tool button for the horizontal top toolbar (fixed height — not square). */
 function RailTool({
   active,
   onClick,
@@ -1899,12 +1938,12 @@ function RailTool({
       disabled={disabled}
       title={label}
       aria-pressed={active}
-      className={`aspect-square w-full flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] sm:text-[11px] font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 rounded-[3px] border-2 border-ink leading-none ${
+      className={`min-h-[3.75rem] w-full min-w-0 flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] sm:text-[11px] font-slab font-bold uppercase tracking-wide transition-colors disabled:opacity-40 rounded-[3px] border-2 border-ink leading-none overflow-visible ${
         active ? 'bg-grief text-paper' : 'bg-papercard text-ink hover:bg-paper2'
       }`}
     >
-      <span className="text-lg sm:text-xl leading-none" aria-hidden="true">{icon}</span>
-      <span className="text-center leading-tight max-w-full truncate px-0.5">{label}</span>
+      <span className="text-lg sm:text-xl leading-none shrink-0" aria-hidden="true">{icon}</span>
+      <span className="text-center leading-tight max-w-full px-0.5 whitespace-nowrap">{label}</span>
     </button>
   );
 }

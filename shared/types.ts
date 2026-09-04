@@ -112,6 +112,11 @@ export interface RoundSettings {
 export interface Player {
   id: string;
   nickname: string;
+  /**
+   * Catalog avatar id (`shared/avatars`). Optional for legacy seats that
+   * joined before avatars existed — clients fall back to the letter initial.
+   */
+  avatarId?: string;
   isHost: boolean;
   connected: boolean;
   score: number;
@@ -197,8 +202,8 @@ export interface SeedSource {
 
 /** Messages sent FROM a client TO the server. */
 export type ClientMessage =
-  | { type: 'createRoom'; nickname: string }
-  | { type: 'joinRoom'; code: string; nickname: string }
+  | { type: 'createRoom'; nickname: string; avatarId?: string }
+  | { type: 'joinRoom'; code: string; nickname: string; avatarId?: string }
   | { type: 'rejoin'; code: string; playerId: string } // reconnect support
   | { type: 'removePlayer'; playerId: string } // host only
   | { type: 'setVoting'; enabled: boolean } // host only

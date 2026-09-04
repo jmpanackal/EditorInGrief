@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { timerModeLabel, type TimerMode } from '@shared/types';
 import type { RoomApi } from '../state/useRoom';
 import { RedactionEditor } from './RedactionEditor';
 import { Countdown, CountdownIdle } from './Countdown';
 import { PreRoundCountdown } from './PreRoundCountdown';
+import { PlayerList, type PlayerPresenceStatus } from './PlayerList';
+import { RoomInvite } from './RoomInvite';
 
 export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetMs: number }) {
   const state = room.state!;
@@ -21,6 +23,18 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
   const readyCount = round.submissions.length;
   const previousReadyCount = useRef(readyCount);
   const [filedPulse, setFiledPulse] = useState(false);
+
+  const readyIds = useMemo(
+    () => new Set(round.submissions.map((s) => s.playerId)),
+    [round.submissions],
+  );
+  const statusById = useMemo(() => {
+    const map: Record<string, PlayerPresenceStatus> = {};
+    for (const p of state.players) {
+      map[p.id] = readyIds.has(p.id) ? 'ready' : 'editing';
+    }
+    return map;
+  }, [state.players, readyIds]);
 
   useEffect(() => {
     if (readyCount === previousReadyCount.current) return;
@@ -74,86 +88,140 @@ export function RoundView({ room, clockOffsetMs }: { room: RoomApi; clockOffsetM
           : 'Ready — waiting for others or the deadline…')
       : 'Edit the post by redacting text';
 
+  const renderReadyBadge = (compact = false) => (
+    <span
+      className={`shrink-0 rounded-[3px] border border-ink bg-paper2 font-display font-black tabular-nums text-ink leading-none transition-transform ${
+        compact
+          ? 'px-1.5 py-0.5 text-[10px] border'
+          : 'border-2 px-2.5 py-1 text-base'
+      } ${filedPulse ? 'animate-pop !bg-grief !text-paper scale-110' : ''}`}
+      title="Players ready"
+    >
+      {readyCount}/{connected} ready
+    </span>
+  );
+
   return (
-    <div className="flex flex-col flex-1 min-h-0 h-full gap-1.5 sm:gap-2 animate-fade-up">
-      {/* Compact chrome: meta row + slim horizontal deadline bar (no circular-only timer) */}
-      <div className="card shrink-0 px-2.5 sm:px-3 py-1.5 flex flex-col gap-1.5">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-            <span className="kicker text-[9px] sm:text-[10px] whitespace-nowrap shrink-0">
-              Story No. {state.roundNumber}
-            </span>
-            {!untimed && (
-              <span className="pill !px-1.5 !py-0 text-[9px] sm:text-[10px] hidden sm:inline-flex shrink-0">
-                {lengthBadge(round.timerMode, round.timerSeconds)}
+    // Mobile (<md): top presence rail + editor column (lobby-style).
+    // Desktop (md+): left Players column + timer/editor — same shell as Lobby/Scoreboard.
+    <div className="flex flex-col md:grid md:grid-cols-[340px_1fr] gap-1.5 sm:gap-2 md:gap-3 animate-fade-up min-w-0 flex-1 min-h-0 h-full">
+      {/* —— Mobile top: compact horizontal presence rail (Lobby density) —— */}
+      <div className="md:hidden shrink-0 grow-0 card px-2 py-1 flex flex-col gap-0.5 min-w-0 max-h-[45%]">
+        <div className="flex items-center justify-between gap-2 shrink-0">
+          <div className="min-w-0 flex items-baseline gap-1.5">
+            <span className="kicker text-[9px] leading-none">In the newsroom</span>
+            <span className="font-display font-black text-sm leading-none tracking-tight">Staff</span>
+          </div>
+          {renderReadyBadge(true)}
+        </div>
+        <div className="min-h-0">
+          <PlayerList
+            layout="rail"
+            players={state.players}
+            meId={room.playerId}
+            maxPlayers={state.maxPlayers}
+            statusById={statusById}
+          />
+        </div>
+      </div>
+
+      {/* —— Desktop left: content-sized roster, Invite snug underneath (Lobby shell) ——
+          Do NOT flex-1 the Players card — that left a huge cream gutter below the seats. */}
+      <div className="hidden md:flex flex-col gap-2 min-w-0 h-full min-h-0">
+        <div className="card p-3 flex flex-col gap-2 shrink-0 grow-0 max-h-[50%] min-h-0 overflow-hidden">
+          <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-ink/25 shrink-0">
+            <div className="min-w-0">
+              <div className="kicker text-[10px]">In the newsroom</div>
+              <h2 className="font-display font-black text-xl leading-none tracking-tight mt-0.5">Staff</h2>
+            </div>
+            {renderReadyBadge()}
+          </div>
+          <div className="min-h-0 overflow-y-auto themed-scroll pr-0.5 -mr-0.5">
+            <PlayerList
+              players={state.players}
+              meId={room.playerId}
+              maxPlayers={state.maxPlayers}
+              statusById={statusById}
+            />
+          </div>
+        </div>
+        <div className="shrink-0">
+          <RoomInvite code={state.code} />
+        </div>
+      </div>
+
+      {/* —— Editor column: meta chrome + stage —— */}
+      <div className="flex flex-col gap-1.5 sm:gap-2 min-w-0 flex-1 min-h-0 md:h-full">
+        {/* Compact chrome: meta row + slim horizontal deadline bar */}
+        <div className="card shrink-0 px-2.5 sm:px-3 py-1.5 flex flex-col gap-1.5">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+              <span className="kicker text-[9px] sm:text-[10px] whitespace-nowrap shrink-0">
+                Story No. {state.roundNumber}
               </span>
-            )}
+              {!untimed && (
+                <span className="pill !px-1.5 !py-0 text-[9px] sm:text-[10px] hidden sm:inline-flex shrink-0">
+                  {lengthBadge(round.timerMode, round.timerSeconds)}
+                </span>
+              )}
+              {untimed && (
+                <span className="pill !px-1.5 !py-0 text-[9px] sm:text-[10px] hidden sm:inline-flex shrink-0">
+                  No time limit
+                </span>
+              )}
+              <span className="pill !px-1.5 !py-0 text-[9px] sm:text-[10px] hidden md:inline-flex shrink-0">
+                {isUpload ? 'Wire upload' : 'Wire photo'}
+              </span>
+              <span className={`font-display font-black text-sm sm:text-base truncate min-w-0 ${submittedByMe && !inCountdown ? 'text-ink2 italic' : ''}`}>
+                {prompt}
+              </span>
+            </div>
+
             {untimed && (
-              <span className="pill !px-1.5 !py-0 text-[9px] sm:text-[10px] hidden sm:inline-flex shrink-0">
-                No time limit
-              </span>
+              <UntimedStatus
+                inCountdown={inCountdown}
+                submittedByMe={submittedByMe}
+                readyCount={readyCount}
+                connected={connected}
+                showForce={room.isHost && !inCountdown}
+                onForce={() => room.forceReveal()}
+              />
             )}
-            <span className="pill !px-1.5 !py-0 text-[9px] sm:text-[10px] hidden md:inline-flex shrink-0">
-              {isUpload ? 'Wire upload' : 'Wire photo'}
-            </span>
-            <span className={`font-display font-black text-sm sm:text-base truncate min-w-0 ${submittedByMe && !inCountdown ? 'text-ink2 italic' : ''}`}>
-              {prompt}
-            </span>
           </div>
 
-          <span
-            className={`shrink-0 rounded-[3px] border-2 border-ink bg-paper2 px-2 sm:px-2.5 py-0.5 sm:py-1 font-display font-black tabular-nums text-sm sm:text-base text-ink leading-none transition-transform ${
-              filedPulse ? 'animate-pop !bg-grief !text-paper scale-110' : ''
-            }`}
-            title="Players ready"
-          >
-            {readyCount}/{connected} ready
-          </span>
-
-          {untimed && (
-            <UntimedStatus
-              inCountdown={inCountdown}
-              submittedByMe={submittedByMe}
-              readyCount={readyCount}
-              connected={connected}
-              showForce={room.isHost && !inCountdown}
-              onForce={() => room.forceReveal()}
-            />
+          {!untimed && (
+            inCountdown ? (
+              <CountdownIdle durationSeconds={round.timerSeconds} />
+            ) : (
+              <Countdown
+                startedAt={round.startedAt}
+                durationSeconds={round.timerSeconds}
+                clockOffsetMs={clockOffsetMs}
+                onExpire={handleExpire}
+              />
+            )
           )}
         </div>
 
-        {!untimed && (
-          inCountdown ? (
-            <CountdownIdle durationSeconds={round.timerSeconds} />
-          ) : (
-            <Countdown
-              startedAt={round.startedAt}
-              durationSeconds={round.timerSeconds}
+        {/* Stage — fills remaining viewport; editor chrome stays inside */}
+        <div className="card flex-1 min-h-0 p-1.5 sm:p-2 relative overflow-hidden flex flex-col">
+          {inCountdown && (
+            <PreRoundCountdown
+              countdownStartedAt={round.countdownStartedAt}
               clockOffsetMs={clockOffsetMs}
-              onExpire={handleExpire}
             />
-          )
-        )}
-      </div>
-
-      {/* Stage — fills remaining viewport; editor chrome stays inside */}
-      <div className="card flex-1 min-h-0 p-1.5 sm:p-2 relative overflow-hidden flex flex-col">
-        {inCountdown && (
-          <PreRoundCountdown
-            countdownStartedAt={round.countdownStartedAt}
-            clockOffsetMs={clockOffsetMs}
+          )}
+          <RedactionEditor
+            imageUrl={source.imageUrl}
+            onSubmit={handleSubmit}
+            onUnsubmit={handleUnsubmit}
+            submitted={submittedByMe}
+            flushToken={flushToken}
+            disabled={inCountdown}
+            maxRedactions={round.maxRedactions}
+            storageKey={room.playerId ? `eig.draft.${round.id}.${room.playerId}` : undefined}
           />
-        )}
-        <RedactionEditor
-          imageUrl={source.imageUrl}
-          onSubmit={handleSubmit}
-          onUnsubmit={handleUnsubmit}
-          submitted={submittedByMe}
-          flushToken={flushToken}
-          disabled={inCountdown}
-          maxRedactions={round.maxRedactions}
-          storageKey={room.playerId ? `eig.draft.${round.id}.${room.playerId}` : undefined}
-        />
+        </div>
       </div>
     </div>
   );

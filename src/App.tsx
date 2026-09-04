@@ -52,7 +52,7 @@ export default function App() {
             ? `flex-1 min-h-0 overflow-hidden flex flex-col mx-auto w-full max-w-[1600px] min-w-0 ${
                 isEditorPhase
                   ? 'px-2 py-2 sm:px-3 sm:py-2.5'
-                  : isLobbyPhase || isScoreboardPhase
+                  : isLobbyPhase || isScoreboardPhase || phase === 'reveal'
                     ? 'px-2.5 py-2 sm:px-4 sm:py-3'
                     : 'px-3 py-2.5 sm:px-4 sm:py-3'
               }`
@@ -66,18 +66,22 @@ export default function App() {
         )}
       </main>
 
-      {/* Connection banner */}
+      {/* Connection banner — top of viewport, above sticky header */}
       {inRoom && room.status !== 'open' && (
-        <div className="fixed bottom-4 inset-x-0 flex justify-center pointer-events-none z-20">
+        <div className="fixed top-4 inset-x-0 flex justify-center px-4 pointer-events-none z-50">
           <div className="pill shadow-clip">
             <span className="w-2 h-2 rounded-full bg-grief animate-pulse" /> Reconnecting… ({room.status})
           </div>
         </div>
       )}
 
-      {/* Error toast — styled as a wire bulletin */}
+      {/* Error toast — styled as a wire bulletin; sit below reconnect pill when both show */}
       {toast && (
-        <div className="fixed top-4 inset-x-0 flex justify-center px-4 z-30 animate-fade-up">
+        <div
+          className={`fixed inset-x-0 flex justify-center px-4 z-50 animate-fade-up ${
+            inRoom && room.status !== 'open' ? 'top-16' : 'top-4'
+          }`}
+        >
           <div className="pill bg-grief text-paper border-ink max-w-md text-center shadow-clip">⚠ {toast}</div>
         </div>
       )}
@@ -110,10 +114,10 @@ function phaseTitle(phase: string | undefined): string | null {
   switch (phase) {
     case 'lobby': return 'Lobby';
     case 'countdown':
-    case 'round': return 'Editing';
+    case 'round': return 'Edit';
     case 'reveal': return 'Reveal';
     case 'voting': return 'Voting';
-    case 'scoreboard': return 'Final Edition';
+    case 'scoreboard': return 'Results';
     default: return null;
   }
 }
@@ -155,7 +159,7 @@ function Header({
             <div className={`font-display font-black leading-none tracking-tight whitespace-nowrap ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'}`}>
               Editor in <span className="text-grief">Grief</span>
             </div>
-            {title && !compact && (
+            {title && (
               <div className="kicker text-[10px] sm:text-[11px] mt-0.5 text-ink2">{title}</div>
             )}
           </div>

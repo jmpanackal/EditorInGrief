@@ -78,14 +78,14 @@ export function Scoreboard({ room }: { room: RoomApi }) {
     // Mobile (<md): Lobby-style one screen — player rail / scrollable edition / Invite+Play bar.
     // Desktop (md+): 2-column Players + edition (Invite under roster) — same visual language as Lobby.
     <div className="flex flex-col md:grid md:grid-cols-[340px_1fr] gap-2 sm:gap-3 md:gap-4 animate-fade-up min-w-0 flex-1 min-h-0 h-full">
-      {/* —— Mobile top: horizontal player rail —— */}
-      <div className="md:hidden shrink-0 grow-0 card p-2 flex flex-col gap-1.5 min-w-0 max-h-[45%]">
+      {/* —— Mobile top: compact horizontal player rail —— */}
+      <div className="md:hidden shrink-0 grow-0 card px-2 py-1 flex flex-col gap-0.5 min-w-0 max-h-[45%]">
         <div className="flex items-center justify-between gap-2 shrink-0">
-          <div className="min-w-0">
-            <div className="kicker text-[10px]">{voting ? 'Standings' : 'In the room'}</div>
-            <h2 className="font-display font-black text-base leading-none tracking-tight mt-0.5">
+          <div className="min-w-0 flex items-baseline gap-1.5">
+            <span className="kicker text-[9px] leading-none">{voting ? 'Standings' : 'In the room'}</span>
+            <span className="font-display font-black text-sm leading-none tracking-tight">
               {voting ? 'Scores' : 'Players'}
-            </h2>
+            </span>
           </div>
         </div>
         <div className="min-h-0">
@@ -93,6 +93,7 @@ export function Scoreboard({ room }: { room: RoomApi }) {
             layout="rail"
             players={state.players}
             meId={room.playerId}
+            maxPlayers={state.maxPlayers}
             showScores={voting}
             canRemove={room.isHost}
             onRemove={room.removePlayer}
@@ -115,6 +116,7 @@ export function Scoreboard({ room }: { room: RoomApi }) {
             <PlayerList
               players={state.players}
               meId={room.playerId}
+              maxPlayers={state.maxPlayers}
               showScores={voting}
               canRemove={room.isHost}
               onRemove={room.removePlayer}
@@ -128,9 +130,19 @@ export function Scoreboard({ room }: { room: RoomApi }) {
 
       {/* —— Middle: edition scrolls; bottom bar always visible —— */}
       <div className="flex flex-col gap-2 min-w-0 flex-1 min-h-0 md:h-full">
-        <div className="card p-3 sm:p-4 flex flex-col gap-2 min-w-0 flex-1 min-h-0 overflow-y-auto themed-scroll">
+        {/* Single-edit tightens gaps; height-capped clips keep md from needing a
+            dead scrollbar. overflow-y-auto stays so mobile stack can still scroll. */}
+        <div
+          className={`card p-3 sm:p-4 flex flex-col min-w-0 flex-1 min-h-0 overflow-y-auto themed-scroll ${
+            filed === 1 ? 'gap-1.5 sm:gap-2' : 'gap-2'
+          }`}
+        >
           {/* 3-col header: title centered (Today’s Story scale); download desktop-only on the right */}
-          <div className="shrink-0 grid grid-cols-[1fr_auto_1fr] items-start gap-2 mb-1">
+          <div
+            className={`shrink-0 grid grid-cols-[1fr_auto_1fr] items-start gap-2 ${
+              filed === 1 ? 'mb-0' : 'mb-1'
+            }`}
+          >
             <div aria-hidden className="min-w-0" />
             <header className="text-center px-2">
               <div className="kicker text-[10px] sm:text-[11px] flex items-center justify-center gap-2">
@@ -231,10 +243,48 @@ function VerdictGallery({
 
   const editCount = playerItems.length;
 
+  // Single-edit on md+: Original + edit side-by-side so the wide middle column
+  // isn't wasted. Mobile stays stacked. Both clips share the Original height
+  // cap so a tall submission doesn't force a dead middle scrollbar.
+  if (editCount === 1) {
+    const only = playerItems[0]!;
+    return (
+      <div
+        className="flex flex-col md:grid md:grid-cols-2 gap-2 md:gap-3 items-start md:items-stretch w-full max-w-6xl mx-auto md:min-h-0 md:flex-1"
+        data-verdict="gallery"
+      >
+        <div className="w-full min-w-0 md:min-h-0" data-verdict="original">
+          <VerdictClip
+            src={originalSrc}
+            alt="Original source image"
+            label="Original"
+            dashed
+            featured
+          />
+        </div>
+        <div className="w-full min-w-0 md:min-h-0" data-verdict="edits">
+          <VerdictClip
+            key={only.id}
+            {...only}
+            submissionId={only.id}
+            reactionMap={reactions[only.id]}
+            meId={meId}
+            onReact={onReact}
+            heightCapped
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="w-full flex justify-center" data-verdict="original">
-        <div className="w-full flex flex-col max-w-2xl">
+        <div
+          className={`w-full flex flex-col mx-auto ${
+            editCount === 2 ? 'max-w-5xl' : 'max-w-3xl'
+          }`}
+        >
           <VerdictClip
             src={originalSrc}
             alt="Original source image"
@@ -249,11 +299,9 @@ function VerdictGallery({
         <div className="w-full" data-verdict="edits">
           <div
             className={`w-full grid gap-3 content-start items-start ${
-              editCount === 1
-                ? 'grid-cols-1 max-w-xl mx-auto'
-                : editCount === 2
-                  ? 'grid-cols-1 sm:grid-cols-2 max-w-4xl mx-auto'
-                  : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+              editCount === 2
+                ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl mx-auto'
+                : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
             }`}
           >
             {playerItems.map((item) => (
@@ -282,6 +330,7 @@ function VerdictClip({
   isWinner = false,
   dashed = false,
   featured = false,
+  heightCapped = false,
   submissionId,
   reactionMap,
   meId,
@@ -291,8 +340,11 @@ function VerdictClip({
   reactionMap?: Record<string, string[]>;
   meId?: string | null;
   onReact?: (submissionId: string, emoji: VerdictReactionEmoji) => void;
+  /** Match Original max-h (single-edit gallery) so tall edits don't overflow. */
+  heightCapped?: boolean;
 }) {
   const showReactions = !!submissionId && !!onReact && !featured;
+  const capHeight = featured || heightCapped;
 
   return (
     <div
@@ -336,12 +388,12 @@ function VerdictClip({
         src={src}
         alt={alt}
         showHint
-        // Featured Original: cap height on md+ so the first submission row
-        // stays above the fold in the scrollable edition column. Mobile keeps
-        // a softer cap (middle region still scrolls). Same max-h + object-contain
+        // Featured / single-edit: cap height on md+ so Original + one submission
+        // stay in the middle panel without a dead scrollbar. Mobile keeps a
+        // softer cap (middle region may still scroll). Same max-h + object-contain
         // pattern as Lobby source previews (w-auto so aspect ratio holds).
         className={
-          featured
+          capHeight
             ? 'max-h-[min(48dvh,26rem)] md:max-h-[min(34dvh,18rem)] w-auto max-w-full mx-auto h-auto object-contain bg-paper2'
             : 'w-full h-auto object-contain bg-paper2'
         }

@@ -65,11 +65,20 @@ export class WebSocketTransport implements Transport {
       }
     };
 
-    this.ws.onerror = () => this.setStatus('error');
+    // While auto-reconnect is armed, keep status on "connecting" through the
+    // backoff gap. Reporting "closed"/"error" here made JoinScreen show a
+    // CONNECTING… CTA beside a CLOSED footer even though retries were pending.
+    this.ws.onerror = () => {
+      if (!this.shouldReconnect) this.setStatus('error');
+    };
 
     this.ws.onclose = () => {
-      this.setStatus('closed');
-      this.scheduleReconnect();
+      if (this.shouldReconnect) {
+        this.setStatus('connecting');
+        this.scheduleReconnect();
+      } else {
+        this.setStatus('closed');
+      }
     };
   }
 

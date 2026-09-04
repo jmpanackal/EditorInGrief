@@ -30,6 +30,7 @@ import {
   type Submission,
   type TimerMode,
 } from '@shared/types.ts';
+import { resolveAvatarId } from '@shared/avatars.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -171,10 +172,17 @@ export class GameStore {
   // -------------------------------------------------------------------------
   // Lobby
   // -------------------------------------------------------------------------
-  createRoom(nickname: string): { code: string; playerId: string } {
+  createRoom(nickname: string, avatarId?: string): { code: string; playerId: string } {
     const code = this.newCode();
     const playerId = randomId('p');
-    const host: Player = { id: playerId, nickname: cleanNick(nickname), isHost: true, connected: true, score: 0 };
+    const host: Player = {
+      id: playerId,
+      nickname: cleanNick(nickname),
+      avatarId: resolveAvatarId(avatarId),
+      isHost: true,
+      connected: true,
+      score: 0,
+    };
     const state: RoomState = {
       code,
       phase: 'lobby',
@@ -202,13 +210,20 @@ export class GameStore {
     return { code, playerId };
   }
 
-  joinRoom(code: string, nickname: string): { code: string; playerId: string } {
+  joinRoom(code: string, nickname: string, avatarId?: string): { code: string; playerId: string } {
     const room = this.requireRoom(code);
     if (room.state.players.length >= room.state.maxPlayers) {
       throw new GameError(`Room "${room.state.code}" is full (max ${room.state.maxPlayers} players).`);
     }
     const playerId = randomId('p');
-    const player: Player = { id: playerId, nickname: cleanNick(nickname), isHost: false, connected: true, score: 0 };
+    const player: Player = {
+      id: playerId,
+      nickname: cleanNick(nickname),
+      avatarId: resolveAvatarId(avatarId),
+      isHost: false,
+      connected: true,
+      score: 0,
+    };
     room.state.players.push(player);
     return { code: room.state.code, playerId };
   }

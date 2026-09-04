@@ -227,14 +227,14 @@ wss.on('connection', (ws) => {
 function handle(ws: WebSocket, msg: ClientMessage) {
   switch (msg.type) {
     case 'createRoom': {
-      const { code, playerId } = store.createRoom(msg.nickname);
+      const { code, playerId } = store.createRoom(msg.nickname, msg.avatarId);
       attach(ws, code, playerId);
       send(ws, { type: 'joined', playerId, code });
       store.broadcast(code);
       break;
     }
     case 'joinRoom': {
-      const { code, playerId } = store.joinRoom(msg.code, msg.nickname);
+      const { code, playerId } = store.joinRoom(msg.code, msg.nickname, msg.avatarId);
       attach(ws, code, playerId);
       send(ws, { type: 'joined', playerId, code });
       // Attach before broadcasting so the new player receives the same initial

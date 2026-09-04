@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
+import { randomAvatarId, type AvatarId } from '@shared/avatars';
 import type { RoomApi } from '../state/useRoom';
 import { dateline } from '../lib/format';
 import { parseJoinCodeFromLocation, syncRoomUrl } from '../lib/roomUrl';
+import { AvatarPicker } from './AvatarPicker';
 import { HowToPlayCarousel } from './HowToPlayCarousel';
 
 export function JoinScreen({ room }: { room: RoomApi }) {
   const [nickname, setNickname] = useState('');
   const [code, setCode] = useState('');
+  const [avatarId, setAvatarId] = useState<AvatarId>(() => randomAvatarId());
   // Default to Enter Lobby so the primary host path is highlighted — Join is
   // one tap away when you already have a code.
   const [mode, setMode] = useState<'join' | 'create'>('create');
@@ -24,7 +27,9 @@ export function JoinScreen({ room }: { room: RoomApi }) {
   const nick = nickname.trim();
   const canCreate = nick.length > 0;
   const canJoin = nick.length > 0 && code.trim().length >= 3;
-  const connecting = room.status !== 'open';
+  const offline = room.status !== 'open';
+  const statusLabel =
+    room.status === 'open' ? 'On the wire' : room.status === 'connecting' ? 'Connecting' : room.status;
 
   /** Leave the invite layout for the organic Join / Start landing. */
   const backToHome = () => {
@@ -92,13 +97,16 @@ export function JoinScreen({ room }: { room: RoomApi }) {
                   className="card p-6 flex flex-col gap-4 shadow-clip flex-1 justify-center"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (!canJoin || connecting) return;
-                    room.joinRoom(code, nick);
+                    if (!canJoin || offline) return;
+                    room.joinRoom(code, nick, avatarId);
                   }}
                 >
                   <div className="text-center">
                     <div className="stamp stamp-ink animate-stamp-in">You're invited</div>
                   </div>
+
+                  <AvatarPicker avatarId={avatarId} onChange={setAvatarId} />
+
                   {/* Editable, not just a static display — if the invite is
                       stale (host's room already closed, a typo in the
                       shared link) there needs to be a way to fix the code
@@ -124,8 +132,8 @@ export function JoinScreen({ room }: { room: RoomApi }) {
                       onChange={(e) => setNickname(e.target.value)}
                     />
                   </div>
-                  <button type="submit" className="btn-primary py-3.5 text-xl" disabled={!canJoin || connecting}>
-                    {connecting ? 'Connecting…' : 'Join Lobby →'}
+                  <button type="submit" className="btn-primary py-3.5 text-xl" disabled={!canJoin || offline}>
+                    {offline ? `${statusLabel}…` : 'Join Lobby →'}
                   </button>
                   {room.error && (
                     <p className="text-center text-grief font-slab font-semibold text-sm leading-snug" role="alert">
@@ -134,7 +142,7 @@ export function JoinScreen({ room }: { room: RoomApi }) {
                   )}
                   <div className="flex items-center justify-center gap-2 text-sm text-ink3">
                     <span className={`w-2 h-2 rounded-full ${room.status === 'open' ? 'bg-grief' : 'bg-ink3 animate-pulse'}`} />
-                    <span className="uppercase tracking-wide font-semibold">{room.status === 'open' ? 'On the wire' : room.status}</span>
+                    <span className="uppercase tracking-wide font-semibold">{statusLabel}</span>
                   </div>
                   {/* Explicitly names the "room's gone" case, not just "not
                       your invite" — that phrasing reads as a dead end if
@@ -156,14 +164,16 @@ export function JoinScreen({ room }: { room: RoomApi }) {
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (mode === 'join') {
-                      if (!canJoin || connecting) return;
-                      room.joinRoom(code, nick);
+                      if (!canJoin || offline) return;
+                      room.joinRoom(code, nick, avatarId);
                     } else {
-                      if (!canCreate || connecting) return;
-                      room.createRoom(nick);
+                      if (!canCreate || offline) return;
+                      room.createRoom(nick, avatarId);
                     }
                   }}
                 >
+                  <AvatarPicker avatarId={avatarId} onChange={setAvatarId} />
+
                   <div>
                     <label className="kicker text-sm">Your byline</label>
                     <input
@@ -194,19 +204,19 @@ export function JoinScreen({ room }: { room: RoomApi }) {
                           onChange={(e) => setCode(e.target.value.toUpperCase())}
                         />
                       </div>
-                      <button type="submit" className="btn-primary py-3.5 text-xl" disabled={!canJoin || connecting}>
-                        {connecting ? 'Connecting…' : 'Join Lobby →'}
+                      <button type="submit" className="btn-primary py-3.5 text-xl" disabled={!canJoin || offline}>
+                        {offline ? `${statusLabel}…` : 'Join Lobby →'}
                       </button>
                     </>
                   ) : (
-                    <button type="submit" className="btn-primary py-3.5 text-xl" disabled={!canCreate || connecting}>
-                      {connecting ? 'Connecting…' : 'Enter Lobby →'}
+                    <button type="submit" className="btn-primary py-3.5 text-xl" disabled={!canCreate || offline}>
+                      {offline ? `${statusLabel}…` : 'Enter Lobby →'}
                     </button>
                   )}
 
                   <div className="flex items-center justify-center gap-2 text-sm text-ink3">
                     <span className={`w-2 h-2 rounded-full ${room.status === 'open' ? 'bg-grief' : 'bg-ink3 animate-pulse'}`} />
-                    <span className="uppercase tracking-wide font-semibold">{room.status === 'open' ? 'On the wire' : room.status}</span>
+                    <span className="uppercase tracking-wide font-semibold">{statusLabel}</span>
                     <span>·</span>
                     <span>Best played over voice chat</span>
                   </div>

@@ -12,8 +12,17 @@ function spacedCode(code: string): string {
  * copies the join link, plus a secondary QR opener. Kept out of the app header
  * so the masthead stays brand/nickname-only.
  * `compact` — single-row height for mobile lobby chrome where vertical space is tight.
+ * `quiet` — outline/secondary treatment for Reveal (Next stays the primary CTA).
  */
-export function RoomInvite({ code, compact = false }: { code: string; compact?: boolean }) {
+export function RoomInvite({
+  code,
+  compact = false,
+  quiet = false,
+}: {
+  code: string;
+  compact?: boolean;
+  quiet?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const joinUrl = buildJoinUrl(code);
@@ -31,36 +40,54 @@ export function RoomInvite({ code, compact = false }: { code: string; compact?: 
 
   return (
     <>
-      <div className={`flex items-stretch gap-1.5 ${compact ? 'h-full' : 'gap-2'}`}>
+      <div className={`flex items-stretch gap-1.5 ${compact && !quiet ? 'h-full' : quiet ? '' : 'gap-2'}`}>
         <button
           type="button"
-          className={`btn-primary flex-1 min-w-0 !flex items-center justify-center leading-none ${
-            compact
-              ? '!py-2 !px-2.5 !flex-row !gap-1.5 h-full min-h-[2.5rem]'
-              : '!py-3 !flex-col !gap-0.5'
-          }`}
+          className={
+            quiet
+              ? 'btn-secondary flex-1 min-w-0 !flex !flex-row !items-center !justify-between !gap-2 !py-2 !px-3'
+              : `btn-primary flex-1 min-w-0 !flex items-center justify-center leading-none ${
+                  compact
+                    ? '!py-2 !px-2.5 !flex-row !gap-1.5 h-full min-h-[2.5rem]'
+                    : '!py-3 !flex-col !gap-0.5'
+                }`
+          }
           onClick={copy}
           title={joinUrl}
           aria-label={copied ? `Copied invite link for room ${code}` : `Copy invite link for room ${code}`}
         >
-          <span className={`kicker !text-paper/80 shrink-0 ${compact ? 'text-[9px] tracking-[0.12em]' : 'text-[10px] tracking-[0.18em]'}`}>
+          <span
+            className={
+              quiet
+                ? 'kicker text-[9px] tracking-[0.12em] shrink-0 text-ink3'
+                : `kicker !text-paper/80 shrink-0 ${compact ? 'text-[9px] tracking-[0.12em]' : 'text-[10px] tracking-[0.18em]'}`
+            }
+          >
             {copied ? 'Copied' : 'Invite'}
           </span>
           <span
-            className={`font-display font-black tabular-nums whitespace-nowrap ${
-              compact
-                ? 'text-[15px] tracking-[0.14em] pl-[0.14em]'
-                : 'text-2xl sm:text-3xl tracking-[0.28em] pl-[0.28em]'
-            }`}
+            className={
+              quiet
+                ? 'font-display font-black tabular-nums whitespace-nowrap text-base tracking-[0.18em] pl-[0.18em]'
+                : `font-display font-black tabular-nums whitespace-nowrap ${
+                    compact
+                      ? 'text-[15px] tracking-[0.14em] pl-[0.14em]'
+                      : 'text-2xl sm:text-3xl tracking-[0.28em] pl-[0.28em]'
+                  }`
+            }
           >
             {spacedCode(code)}
           </span>
         </button>
         <button
           type="button"
-          className={`btn-secondary self-stretch shrink-0 ${
-            compact ? '!px-2.5 !py-2 text-xs leading-none h-full min-h-[2.5rem]' : '!px-4 min-h-[2.75rem] text-sm'
-          }`}
+          className={
+            quiet
+              ? 'btn-ghost self-stretch shrink-0 !px-2.5 !py-2 text-xs leading-none border border-ink/25'
+              : `btn-secondary self-stretch shrink-0 ${
+                  compact ? '!px-2.5 !py-2 text-xs leading-none h-full min-h-[2.5rem]' : '!px-4 min-h-[2.75rem] text-sm'
+                }`
+          }
           onClick={() => setShowQr(true)}
           aria-label="Show QR code"
         >
