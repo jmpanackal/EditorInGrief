@@ -123,20 +123,26 @@ function VerdictGallery({
   });
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-4 content-start">
-      {/* Original alone on top — larger, dashed grief accent, clear stamp. */}
-      <div className="w-full max-w-xl mx-auto shrink-0">
-        <VerdictClip
-          src={originalSrc}
-          alt="Original source image"
-          label="Original"
-          dashed
-          featured
-        />
+    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-4">
+      {/* Original on its own full-width row — never a sibling in the edits grid. */}
+      <div className="w-full flex justify-center shrink-0" data-verdict="original">
+        <div className="w-full max-w-xl">
+          <VerdictClip
+            src={originalSrc}
+            alt="Original source image"
+            label="Original"
+            dashed
+            featured
+          />
+        </div>
       </div>
 
+      {/* Edits-only grid — starts on the row below Original. */}
       {playerItems.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 content-start items-start">
+        <div
+          className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 content-start items-start"
+          data-verdict="edits"
+        >
           {playerItems.map((item) => (
             <VerdictClip key={item.id} {...item} />
           ))}
