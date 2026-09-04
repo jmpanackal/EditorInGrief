@@ -291,7 +291,7 @@ function VerdictClip({
         className="w-full h-auto object-contain bg-paper2"
       />
       <div
-        className={`px-3 py-2.5 flex items-center justify-between gap-2 border-t-2 ${
+        className={`px-3 py-2.5 flex items-center gap-2 border-t-2 ${
           featured
             ? 'border-dashed border-grief bg-grief/5'
             : dashed
@@ -300,7 +300,7 @@ function VerdictClip({
         }`}
       >
         <span
-          className={`truncate min-w-0 ${
+          className={`truncate min-w-0 shrink ${
             featured
               ? 'font-display font-black tracking-wide uppercase text-sm'
               : 'font-display font-bold text-base sm:text-lg'
@@ -308,40 +308,45 @@ function VerdictClip({
         >
           {label}
         </span>
+        {showReactions && (
+          <div className="flex items-center gap-1 ml-auto shrink-0">
+            {VERDICT_REACTION_EMOJIS.map((emoji) => {
+              const reactors = reactionMap?.[emoji] ?? [];
+              const count = reactors.length;
+              const mine = !!meId && reactors.includes(meId);
+              return (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onReact!(submissionId!, emoji)}
+                  className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-sm leading-none transition-colors ${
+                    mine
+                      ? 'border-grief bg-grief/10'
+                      : 'border-ink/20 bg-papercard hover:border-ink/50'
+                  }`}
+                  aria-label={`React ${emoji}`}
+                  aria-pressed={mine}
+                  title={emoji}
+                >
+                  <span aria-hidden>{emoji}</span>
+                  {count > 0 && (
+                    <span className="tabular-nums text-[11px] font-bold text-ink2">{count}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {votes !== undefined && (
-          <span className="tabular-nums font-display font-black text-base sm:text-lg text-grief shrink-0">
+          <span
+            className={`tabular-nums font-display font-black text-base sm:text-lg text-grief shrink-0 ${
+              showReactions ? '' : 'ml-auto'
+            }`}
+          >
             ♥{votes}
           </span>
         )}
       </div>
-      {showReactions && (
-        <div className="flex flex-wrap items-center justify-center gap-1.5 px-2 py-2 border-t border-ink/15 bg-paper2/60">
-          {VERDICT_REACTION_EMOJIS.map((emoji) => {
-            const reactors = reactionMap?.[emoji] ?? [];
-            const count = reactors.length;
-            const mine = !!meId && reactors.includes(meId);
-            return (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => onReact!(submissionId!, emoji)}
-                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-base transition-colors ${
-                  mine
-                    ? 'border-grief bg-grief/10 shadow-sm'
-                    : 'border-ink/20 bg-papercard hover:border-ink/50'
-                }`}
-                aria-label={`React ${emoji}`}
-                aria-pressed={mine}
-              >
-                <span aria-hidden>{emoji}</span>
-                {count > 0 && (
-                  <span className="tabular-nums text-xs font-bold text-ink2">{count}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
