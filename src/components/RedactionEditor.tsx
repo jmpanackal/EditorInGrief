@@ -1266,11 +1266,14 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
     // TAP (no drag): TOGGLE the single box under the pointer. If it's already
     // redacted, reveal it (remove that shape); otherwise hide it.
     if (!dragged) {
-      let box = selected[0];
-      if (!box && start) box = tightestBoxAt(start, collectBoxes()) ?? undefined;
+      let box: KeyedBox | undefined = selected[0];
+      if (!box && start) {
+        const hit = tightestBoxAt(start, collectBoxes());
+        if (hit) box = hit;
+      }
       if (!box) { renderDisplay(); return; }
 
-      const existingIdx = shapesRef.current.findIndex((s) => s.type === 'rect' && s.ocrKey === box!.key);
+      const existingIdx = shapesRef.current.findIndex((s) => s.type === 'rect' && s.ocrKey === box.key);
       if (existingIdx >= 0) {
         // Reveal: drop that specific redaction and re-bake the scene.
         shapesRef.current = [...shapesRef.current.slice(0, existingIdx), ...shapesRef.current.slice(existingIdx + 1)];
