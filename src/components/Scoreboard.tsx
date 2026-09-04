@@ -139,9 +139,16 @@ function VerdictGallery({
       </div>
 
       {/* Edits-only grid — starts on the row below Original. */}
-      {playerItems.length > 0 && (
+      {playerItems.length === 1 && (
+        <div className="w-full flex justify-center" data-verdict="edits">
+          <div className="w-full max-w-xl">
+            <VerdictClip key={playerItems[0].id} {...playerItems[0]} />
+          </div>
+        </div>
+      )}
+      {playerItems.length >= 2 && (
         <div
-          className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 content-start items-start"
+          className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 content-start items-start [&>*:last-child:nth-child(odd)]:sm:col-span-2 [&>*:last-child:nth-child(odd)]:sm:max-w-[calc(50%-0.375rem)] [&>*:last-child:nth-child(odd)]:sm:justify-self-center"
           data-verdict="edits"
         >
           {playerItems.map((item) => (
@@ -190,7 +197,7 @@ function VerdictClip({
         className="w-full h-auto object-contain bg-paper2"
       />
       <div
-        className={`px-2.5 py-1.5 flex items-center justify-between text-sm border-t-2 ${
+        className={`px-3 py-2.5 flex items-center justify-between gap-2 border-t-2 ${
           featured
             ? 'border-dashed border-grief bg-grief/5'
             : dashed
@@ -198,11 +205,19 @@ function VerdictClip({
               : 'border-ink'
         }`}
       >
-        <span className={`truncate font-semibold ${featured ? 'font-display font-black tracking-wide uppercase text-[13px]' : ''}`}>
+        <span
+          className={`truncate min-w-0 ${
+            featured
+              ? 'font-display font-black tracking-wide uppercase text-sm'
+              : 'font-display font-bold text-base sm:text-lg'
+          }`}
+        >
           {label}
         </span>
         {votes !== undefined && (
-          <span className="tabular-nums font-display font-black text-grief">♥{votes}</span>
+          <span className="tabular-nums font-display font-black text-base sm:text-lg text-grief shrink-0">
+            ♥{votes}
+          </span>
         )}
       </div>
     </div>
