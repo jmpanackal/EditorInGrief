@@ -5,10 +5,21 @@ type ExpandableImageProps = {
   alt: string;
   className: string;
   buttonClassName?: string;
+  /** Show the “Click to expand” caption under the image (default true). */
+  showHint?: boolean;
+  /** Fill parent height — used when Verdict fits Original + ≤3 edits without scrolling. */
+  fill?: boolean;
 };
 
 /** A compact clipping that opens the untouched, full-size image on demand. */
-export function ExpandableImage({ src, alt, className, buttonClassName = '' }: ExpandableImageProps) {
+export function ExpandableImage({
+  src,
+  alt,
+  className,
+  buttonClassName = '',
+  showHint = true,
+  fill = false,
+}: ExpandableImageProps) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -25,13 +36,19 @@ export function ExpandableImage({ src, alt, className, buttonClassName = '' }: E
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`block w-full text-left focus:outline-none focus:ring-2 focus:ring-grief/60 ${buttonClassName}`}
+        className={`${
+          fill
+            ? 'flex h-full w-full min-h-0 items-center justify-center'
+            : 'block w-full'
+        } text-left focus:outline-none focus:ring-2 focus:ring-grief/60 ${buttonClassName}`}
         aria-label={`Expand ${alt}`}
       >
-        <img src={src} alt={alt} className={`block ${className}`} />
-        <span className="block text-center text-[10px] font-semibold text-ink2 py-1 bg-paper hover:text-grief">
-          Click to expand
-        </span>
+        <img src={src} alt={alt} className={`${fill ? '' : 'block '} ${className}`} />
+        {showHint && (
+          <span className="block text-center text-[10px] font-semibold text-ink2 py-1 bg-paper hover:text-grief">
+            Click to expand
+          </span>
+        )}
       </button>
 
       {open && (

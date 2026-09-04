@@ -102,7 +102,7 @@ export function Scoreboard({ room }: { room: RoomApi }) {
         </div>
 
         {/* Quiet meta line — no heavy bar */}
-        <p className="shrink-0 mb-4 text-center text-xs sm:text-sm text-ink3 font-slab tracking-wide">
+        <p className="shrink-0 mb-3 text-center text-xs sm:text-sm text-ink3 font-slab tracking-wide">
           {toastParts.join(' · ')}
         </p>
 
@@ -122,14 +122,14 @@ export function Scoreboard({ room }: { room: RoomApi }) {
         )}
 
         {room.isHost && (
-          <div className="flex flex-wrap gap-2 mt-6 justify-end shrink-0">
+          <div className="flex flex-wrap gap-2 mt-4 justify-end shrink-0">
             <button className="btn-primary" onClick={room.returnToLobby}>
               Play again →
             </button>
           </div>
         )}
         {!room.isHost && (
-          <p className="text-ink3 text-sm mt-6 italic shrink-0">
+          <p className="text-ink3 text-sm mt-4 italic shrink-0">
             Waiting for the host to play again…
           </p>
         )}
@@ -181,54 +181,68 @@ function VerdictGallery({
     };
   });
 
-  const singleEdit = playerItems.length === 1;
+  // ≤3 edits = one row under Original → fit in viewport without scrolling.
+  const fitsOneScreen = playerItems.length <= 3;
+  const editCount = playerItems.length;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-4">
-      {/* Original always alone, centered, on its own row. */}
-      <div className="w-full flex justify-center shrink-0" data-verdict="original">
-        <div className="w-full max-w-2xl">
+    <div
+      className={`flex-1 min-h-0 flex flex-col gap-3 ${
+        fitsOneScreen ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain'
+      }`}
+    >
+      {/* Original alone on top — height-capped when fitting one screen. */}
+      <div
+        className={`w-full flex justify-center min-h-0 ${
+          fitsOneScreen ? 'flex-[1.05_1_0%] overflow-hidden' : 'shrink-0'
+        }`}
+        data-verdict="original"
+      >
+        <div
+          className={`w-full flex flex-col min-h-0 ${
+            fitsOneScreen ? 'max-w-3xl h-full' : 'max-w-2xl'
+          }`}
+        >
           <VerdictClip
             src={originalSrc}
             alt="Original source image"
             label="Original"
             dashed
             featured
+            fit={fitsOneScreen}
           />
         </div>
       </div>
 
-      {/* Edits below: one centered, or 2-col grid. */}
-      {singleEdit && (
-        <div className="w-full flex justify-center" data-verdict="edits">
-          <div className="w-full max-w-xl">
-            <VerdictClip
-              key={playerItems[0].id}
-              {...playerItems[0]}
-              submissionId={playerItems[0].id}
-              reactionMap={reactions[playerItems[0].id]}
-              meId={meId}
-              onReact={onReact}
-            />
-          </div>
-        </div>
-      )}
-
-      {playerItems.length >= 2 && (
+      {/* Edits: up to 3 per row; center when fewer than 3. */}
+      {editCount > 0 && (
         <div
-          className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 content-start items-start [&>*:last-child:nth-child(odd)]:sm:col-span-2 [&>*:last-child:nth-child(odd)]:sm:max-w-[calc(50%-0.375rem)] [&>*:last-child:nth-child(odd)]:sm:justify-self-center"
+          className={`w-full min-h-0 ${
+            fitsOneScreen ? 'flex-[1_1_0%] overflow-hidden' : ''
+          }`}
           data-verdict="edits"
         >
-          {playerItems.map((item) => (
-            <VerdictClip
-              key={item.id}
-              {...item}
-              submissionId={item.id}
-              reactionMap={reactions[item.id]}
-              meId={meId}
-              onReact={onReact}
-            />
-          ))}
+          <div
+            className={`w-full h-full grid gap-3 content-stretch items-stretch ${
+              editCount === 1
+                ? 'grid-cols-1 max-w-xl mx-auto'
+                : editCount === 2
+                  ? 'grid-cols-1 sm:grid-cols-2 max-w-4xl mx-auto'
+                  : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+            }`}
+          >
+            {playerItems.map((item) => (
+              <VerdictClip
+                key={item.id}
+                {...item}
+                submissionId={item.id}
+                reactionMap={reactions[item.id]}
+                meId={meId}
+                onReact={onReact}
+                fit={fitsOneScreen}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -247,17 +261,22 @@ function VerdictClip({
   reactionMap,
   meId,
   onReact,
+  fit = false,
 }: Omit<VerdictItem, 'id'> & {
   submissionId?: string;
   reactionMap?: Record<string, string[]>;
   meId?: string | null;
   onReact?: (submissionId: string, emoji: VerdictReactionEmoji) => void;
+  /** Constrain image to parent height so ≤3 edits fit without page scroll. */
+  fit?: boolean;
 }) {
   const showReactions = !!submissionId && !!onReact && !featured;
 
   return (
     <div
       className={`relative rounded-[3px] overflow-hidden bg-papercard min-w-0 ${
+        fit ? 'h-full min-h-0 flex flex-col' : ''
+      } ${
         featured
           ? 'border-[3px] border-dashed border-grief shadow-clip'
           : dashed
@@ -277,13 +296,27 @@ function VerdictClip({
           Extra!
         </span>
       )}
-      <ExpandableImage
-        src={src}
-        alt={alt}
-        className="w-full h-auto object-contain bg-paper2"
-      />
       <div
-        className={`px-3 py-2.5 flex items-center gap-2 border-t-2 ${
+        className={
+          fit
+            ? 'flex-1 min-h-0 flex items-center justify-center overflow-hidden bg-paper2'
+            : undefined
+        }
+      >
+        <ExpandableImage
+          src={src}
+          alt={alt}
+          showHint={!fit}
+          fill={fit}
+          className={
+            fit
+              ? 'max-h-full max-w-full w-auto h-auto object-contain'
+              : 'w-full h-auto object-contain bg-paper2'
+          }
+        />
+      </div>
+      <div
+        className={`px-3 py-2 flex items-center gap-2 border-t-2 shrink-0 ${
           featured
             ? 'border-dashed border-grief bg-grief/5'
             : dashed
