@@ -732,7 +732,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     return () => c.removeEventListener('wheel', onWheel);
   }, [clientToBacking, applyZoomAt]);
 
-  // Track Shift (constrain) and Space (pan) on desktop.
+  // Shift (constrain) + Space (pan) — tracked globally while the editor is mounted.
+  // Other shortcuts are wired later (after undo/submit) so they share the same guards.
   useEffect(() => {
     const isTypingTarget = (t: EventTarget | null) => {
       const el = t as HTMLElement | null;
@@ -874,6 +875,24 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     if (draftRef.current) { draftRef.current = null; renderDisplay(); }
     drawingRef.current = false;
   }, [renderDisplay]);
+
+  /** Escape: drop in-progress box/marker stroke or tap-text drag preview. */
+  const cancelInProgress = useCallback(() => {
+    const hadDraft = !!draftRef.current || drawingRef.current;
+    cancelDraft();
+    const hadWords =
+      !!wordSelStartRef.current ||
+      wordSelBoxesRef.current.length > 0 ||
+      !!wordSelRectRef.current;
+    if (hadWords) {
+      wordSelStartRef.current = null;
+      wordSelBoxesRef.current = [];
+      wordSelRectRef.current = null;
+      wordDraggedRef.current = false;
+      if (gestureRef.current.mode === 'words') gestureRef.current = { mode: 'none' };
+    }
+    if (hadDraft || hadWords) renderDisplay();
+  }, [cancelDraft, renderDisplay]);
 
   // ---- OCR tap/drag-to-redact -------------------------------------------
   // Lazily OCR the CURRENT source image (natural size => boxes are already in
@@ -1197,6 +1216,102 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
   // Once the server confirms our submission, drop the autosave.
   useEffect(() => { if (submitted) clearSaved(); }, [submitted, clearSaved]);
 
+  // Editor keyboard shortcuts (mounted only during the redaction round).
+  // Skip when typing in a field, when a modal is open, or when the editor is inactive.
+  // No redo stack — Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y are intentionally not bound.
+  useEffect(() => {
+    const isTypingTarget = (t: EventTarget | null) => {
+      const el = t as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    };
+    const modalOpen = () => !!document.querySelector('[aria-modal="true"]');
+    const editorLive = () => interactiveRef.current && !modalOpen();
+
+    const stepThickness = (dir: -1 | 1) => {
+      if (toolRef.current !== 'brush') return false;
+      const cur = thicknessRef.current;
+      let idx = THICKNESS_PRESETS.indexOf(cur as (typeof THICKNESS_PRESETS)[number]);
+      if (idx < 0) {
+        idx = THICKNESS_PRESETS.reduce(
+          (best, t, i) => (Math.abs(t - cur) < Math.abs(THICKNESS_PRESETS[best] - cur) ? i : best),
+          0,
+        );
+      }
+      const next = THICKNESS_PRESETS[Math.max(0, Math.min(THICKNESS_PRESETS.length - 1, idx + dir))];
+      setThickness(next);
+      return true;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
+      // Space / Shift handled by the dedicated pan/constrain listeners above.
+      if (e.code === 'Space' || e.key === 'Shift') return;
+
+      const mod = e.metaKey || e.ctrlKey;
+
+      if (e.key === 'Escape') {
+        if (helpOpen) { setHelpOpen(false); e.preventDefault(); return; }
+        if (!editorLive()) return;
+        cancelInProgress();
+        e.preventDefault();
+        return;
+      }
+
+      if (!editorLive()) return;
+
+      // Undo (same as Undo button — pops last shape).
+      if (mod && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      // Submit
+      if (e.key === 'Enter' && mod) {
+        e.preventDefault();
+        handleSubmit();
+        return;
+      }
+      if (e.key === 'Enter' && !mod && !e.altKey) {
+        const el = document.activeElement as HTMLElement | null;
+        // Don't steal Enter from focused buttons/links (or JoinScreen forms — editor isn't mounted there).
+        if (el && (el.tagName === 'BUTTON' || el.tagName === 'A' || el.closest('button, a, [role="button"]'))) return;
+        e.preventDefault();
+        handleSubmit();
+        return;
+      }
+
+      // Tool switch: 1–4 or B / M / T / E
+      const toolKey = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      const toolMap: Record<string, Tool> = {
+        '1': 'rect', b: 'rect',
+        '2': 'brush', m: 'brush',
+        '3': 'words', t: 'words',
+        '4': 'eraser', e: 'eraser',
+      };
+      if (!mod && !e.altKey && toolMap[toolKey]) {
+        e.preventDefault();
+        setTool(toolMap[toolKey]);
+        return;
+      }
+
+      // Marker thickness: [ ] or - / +
+      if (!mod && !e.altKey && (e.key === '[' || e.key === '-' || e.key === '_')) {
+        if (stepThickness(-1)) e.preventDefault();
+        return;
+      }
+      if (!mod && !e.altKey && (e.key === ']' || e.key === '+' || e.key === '=')) {
+        if (stepThickness(1)) e.preventDefault();
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [undo, handleSubmit, cancelInProgress, helpOpen]);
+
   const remaining = max != null ? Math.max(0, max - shapeCount) : null;
   const limitTone = remaining === 0
     ? 'bg-grief text-paper'
@@ -1219,7 +1334,13 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, submitted, flush
     : '';
 
   const controlsHint =
-    'Default view fits the image to the viewport width (100%) for readable text — pan vertically on tall screenshots.\nZoom: scroll wheel or pinch (Reset returns to fit-width, top-aligned)\nPan: Space + drag, middle-drag, or two-finger drag\nStraight lines / squares: hold Shift (or the Straight toggle)\nTap-text: tap a word to hide/reveal, drag across to hide a range';
+    'Default view fits the image to the viewport width (100%) for readable text — pan vertically on tall screenshots.\n' +
+    'Zoom: scroll wheel or pinch (Reset returns to fit-width, top-aligned)\n' +
+    'Pan: Space + drag, middle-drag, or two-finger drag\n' +
+    'Straight lines / squares: hold Shift (or the Straight toggle)\n' +
+    'Tap-text: tap a word to hide/reveal, drag across to hide a range\n' +
+    'Shortcuts — Ctrl/Cmd+Z undo · 1/B Box · 2/M Marker · 3/T Tap text · 4/E Eraser\n' +
+    '[ ] or −/+ Marker thickness · Ctrl/Cmd+Enter (or Enter) Submit · Esc cancel draw';
 
   const tools: { id: Tool; icon: string; label: string }[] = [
     { id: 'rect', icon: '▭', label: 'Box' },
