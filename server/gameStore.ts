@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path';
 import {
   COUNTDOWN_SECONDS,
   DEFAULT_MAX_PLAYERS,
+  REVEAL_STING_SECONDS,
   TIMER_NORMAL_SECONDS,
   VERDICT_REACTION_EMOJIS,
   clampCustomTimerSeconds,
@@ -534,6 +535,8 @@ export class GameStore {
       untimed: settings.untimed,
       submissions: [],
       revealIndex: 0,
+      revealStingStartedAt: 0,
+      revealStingSkipped: false,
       votingEnabled: room.state.votingEnabled,
       votes: {},
       reactions: {},
@@ -613,8 +616,20 @@ export class GameStore {
     const room = this.requireHost(code, playerId);
     const round = room.state.currentRound;
     if (!round || room.state.phase !== 'reveal') return;
+    // Don't advance the walkthrough while the opening sting is still playing.
+    if (this.isRevealStingActive(round)) return;
     const max = Math.max(0, round.submissions.length - 1);
     round.revealIndex = Math.min(max, Math.max(0, round.revealIndex + direction));
+    this.broadcast(room.state.code);
+  }
+
+  /** Host skips the one-shot 3-2-1 sting so the whole room enters the walkthrough. */
+  skipRevealSting(code: string, playerId: string): void {
+    const room = this.requireHost(code, playerId);
+    const round = room.state.currentRound;
+    if (!round || room.state.phase !== 'reveal') return;
+    if (round.revealStingSkipped || !this.isRevealStingActive(round)) return;
+    round.revealStingSkipped = true;
     this.broadcast(room.state.code);
   }
 
@@ -623,6 +638,7 @@ export class GameStore {
     const room = this.requireHost(code, playerId);
     const round = room.state.currentRound;
     if (!round || room.state.phase !== 'reveal' || !round.votingEnabled) return;
+    if (this.isRevealStingActive(round)) return;
     room.state.phase = 'voting';
     this.broadcast(room.state.code);
   }
@@ -683,6 +699,7 @@ export class GameStore {
     const room = this.requireHost(code, playerId);
     const round = room.state.currentRound;
     if (!round || (room.state.phase !== 'reveal' && room.state.phase !== 'voting')) return;
+    if (room.state.phase === 'reveal' && this.isRevealStingActive(round)) return;
     if (round.votingEnabled && room.state.phase !== 'voting') return;
     if (round.votingEnabled) {
       for (const s of round.submissions) {
@@ -793,8 +810,20 @@ export class GameStore {
 
   private toReveal(room: Room): void {
     room.state.phase = 'reveal';
-    if (room.state.currentRound) room.state.currentRound.revealIndex = 0;
+    if (room.state.currentRound) {
+      room.state.currentRound.revealIndex = 0;
+      // One-shot sting for opening the walkthrough (not between queue advances).
+      room.state.currentRound.revealStingStartedAt = Date.now();
+      room.state.currentRound.revealStingSkipped = false;
+    }
     this.clearPhaseTimers(room);
+  }
+
+  private isRevealStingActive(round: Round): boolean {
+    if (round.revealStingSkipped) return false;
+    if (!round.revealStingStartedAt) return false;
+    const elapsed = (Date.now() - round.revealStingStartedAt) / 1000;
+    return elapsed < REVEAL_STING_SECONDS;
   }
 
   /** Sources currently tied for the highest vote count on the shelf.

@@ -291,6 +291,9 @@ function handle(ws: WebSocket, msg: ClientMessage) {
     case 'advanceReveal':
       withPlayer(ws, (code, pid) => store.advanceReveal(code, pid, msg.direction ?? 1));
       break;
+    case 'skipRevealSting':
+      withPlayer(ws, (code, pid) => store.skipRevealSting(code, pid));
+      break;
     case 'beginVoting':
       withPlayer(ws, (code, pid) => store.beginVoting(code, pid));
       break;
