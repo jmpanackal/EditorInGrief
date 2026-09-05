@@ -173,8 +173,10 @@ export function PlayerList({
         return (
           <li
             key={p.id}
+            // !border-l-* beats parent divide-ink/15 border-color specificity so
+            // the on-stage bar follows highlightId on every row, not only the first.
             className={`flex items-center gap-2 py-2.5 pl-2 border-l-2 ${
-              highlighted ? 'border-grief' : 'border-transparent'
+              highlighted ? '!border-l-grief' : '!border-l-transparent'
             }`}
             aria-current={highlighted ? 'true' : undefined}
           >
@@ -252,7 +254,7 @@ export function PlayerList({
         );
       })}
       {Array.from({ length: shownEmptySeats }).map((_, i) => (
-        <li key={`empty-${i}`} className="flex items-center gap-3 py-2.5 pl-2 border-l-2 border-transparent opacity-50">
+        <li key={`empty-${i}`} className="flex items-center gap-3 py-2.5 pl-2 border-l-2 !border-l-transparent opacity-50">
           <div className={`w-10 h-10 ${AVATAR_PLATE_RADIUS} grid place-items-center border-2 border-dashed border-ink/40 text-ink3 shrink-0`}>
             <span className="text-sm">?</span>
           </div>
@@ -260,7 +262,7 @@ export function PlayerList({
         </li>
       ))}
       {foldedEmptySeats > 0 && (
-        <li className="flex items-center gap-3 py-2 pl-2 border-l-2 border-transparent opacity-70">
+        <li className="flex items-center gap-3 py-2 pl-2 border-l-2 !border-l-transparent opacity-70">
           <div className={`w-10 h-10 ${AVATAR_PLATE_RADIUS} grid place-items-center border border-dashed border-ink/30 shrink-0`}>
             <span className="text-ink3 text-sm font-bold">+{foldedEmptySeats}</span>
           </div>

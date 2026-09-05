@@ -17,8 +17,8 @@ import { disposeOcr, runOcr, type OcrBox, type OcrWord } from '../lib/ocr';
  *   the flattened PNG export operate in image space. A separate VIEW TRANSFORM
  *   (scale + offset) maps image space onto the on-screen display canvas so the
  *   user can pinch/wheel-zoom and pan without ever changing stored geometry.
- *   Default scale is fit-to-width (readable body text; tall images pan vertically),
- *   not contain-entire-image — see computeFit.
+ *   Default scale is contain-entire-image (min of width-fit and height-fit) so the
+ *   whole source is visible on load; users zoom in for detail — see computeFit.
  * - Undo removes the LAST SHAPE; the Uncover tool removes a SPECIFIC shape the
  *   user taps (leaving later shapes intact); Reset clears all.
  * - Performance: committed shapes are baked onto an offscreen "base" canvas at
@@ -530,15 +530,15 @@ interface Props {
 
 /** Gartic-style brush size presets (circles in the tool rail). */
 const THICKNESS_PRESETS = [10, 18, 28, 44, 64] as const;
-/** Allow zooming out below the default fit-width view to survey the whole page. */
+/** Allow zooming out below the default contain view. */
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
 /**
- * Default view is fit-to-width (not contain-entire-image). A slight pad keeps
- * the image from kissing the viewport edge. `zoom === 1` ("100%") means this
- * readable default — Reset returns here.
+ * Default view contains the entire image (min of width-fit and height-fit).
+ * A slight pad keeps the image from kissing the viewport edge. `zoom === 1`
+ * ("100%") means this contain default — Reset returns here.
  */
-const FIT_WIDTH_PAD = 0.98;
+const FIT_PAD = 0.98;
 /** Cap initial upscale so tiny assets don't fill the stage (~2 CSS px / source px). */
 const MAX_FIT_CSS_PX = 2;
 const ERASE_TOLERANCE = 6; // extra image px around a brush stroke for hit-testing
@@ -694,23 +694,22 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
 
   // ---- view transform helpers -------------------------------------------
   /**
-   * Base scale maps image → viewport. Prefer fit-to-width so tall screenshots
-   * fill the stage (minimal side gutters) and body text stays readable; the
-   * user pans vertically for the rest. Tiny sources are clamped so they
-   * aren't blown up absurdly. User zoom multiplies this (`scale = fit * zoom`);
-   * zoom=1 is the default readable view.
+   * Base scale maps image → viewport using contain: min(width-fit, height-fit)
+   * so the entire image is visible end-to-end at zoom=1 (letterboxed if needed).
+   * Tiny sources are clamped so they aren't blown up absurdly. User zoom
+   * multiplies this (`scale = fit * zoom`); zoom=1 is the default contain view.
    */
   const computeFit = useCallback(() => {
     const img = imgRef.current;
     const c = displayRef.current;
-    if (!img || !c || c.width < 2) return;
+    if (!img || !c || c.width < 2 || c.height < 2) return;
     const iw = img.naturalWidth || 1;
+    const ih = img.naturalHeight || 1;
     const dpr = window.devicePixelRatio || 1;
-    const usable = c.width * FIT_WIDTH_PAD;
-    // Fill viewport width (tall images overflow vertically → pan).
-    let fit = usable / iw;
-    // Tiny sources: don't upscale past ~2 CSS pixels per source pixel.
-    fit = Math.min(fit, MAX_FIT_CSS_PX * dpr);
+    const fitW = (c.width * FIT_PAD) / iw;
+    const fitH = (c.height * FIT_PAD) / ih;
+    // Contain: whole image visible; tiny sources capped at ~2 CSS px / source px.
+    let fit = Math.min(fitW, fitH, MAX_FIT_CSS_PX * dpr);
     viewRef.current.fit = fit || 1;
   }, []);
 
@@ -850,8 +849,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
           }
         } catch { /* ignore corrupt entry */ }
       }
-      // New source → default readable view (fit-width at 100%); clamp centers
-      // on any axis where the scaled image is smaller than the stage.
+      // New source → default contain view (100%); clamp centers on any axis
+      // where the scaled image is smaller than the stage.
       viewRef.current.zoom = 1;
       viewRef.current.ox = 0;
       viewRef.current.oy = 0;
@@ -941,7 +940,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
     applyZoomAt(c.width / 2, c.height / 2, factor);
   }, [applyZoomAt]);
 
-  /** Return to the default readable view (fit-width at 100%, centered if letterboxed). */
+  /** Return to the default contain view (100%, centered if letterboxed). */
   const resetView = useCallback(() => {
     const v = viewRef.current;
     v.zoom = 1;
@@ -1656,8 +1655,8 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
     : 'Hover to peek, click to uncover';
 
   const controlsHint =
-    'Default view fits the image to the viewport width (100%) for readable text — pan vertically on tall screenshots.\n' +
-    'Zoom: scroll wheel or pinch (Reset returns to fit-width; short images stay centered)\n' +
+    'Default view fits the whole image in the canvas (100%) — zoom in for detail.\n' +
+    'Zoom: scroll wheel or pinch (Reset returns to fit-entire; short/tall images stay centered)\n' +
     'Pan: Space + drag, middle-drag, or two-finger drag\n' +
     'Straight lines / squares: hold Shift (or the Straight toggle)\n' +
     'Box: drag to draw, or tap to place a box\n' +
@@ -1798,7 +1797,7 @@ export function RedactionEditor({ imageUrl, disabled, onSubmit, onUnsubmit, subm
   const zoomControl = (
     <div className="flex rounded-[3px] overflow-hidden border-2 border-ink bg-papercard font-slab font-bold text-sm shrink-0">
       <button type="button" onClick={() => zoomButton(1 / 1.25)} disabled={!loaded} className="h-9 w-8 sm:w-9 text-lg text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom out" aria-label="Zoom out">−</button>
-      <button type="button" onClick={resetView} disabled={!loaded} className="h-9 w-11 sm:w-12 text-ink2 hover:bg-paper2 disabled:opacity-40 tabular-nums border-x-2 border-ink text-[11px]" title="Reset to default (fit width)">{zoomPct}</button>
+      <button type="button" onClick={resetView} disabled={!loaded} className="h-9 w-11 sm:w-12 text-ink2 hover:bg-paper2 disabled:opacity-40 tabular-nums border-x-2 border-ink text-[11px]" title="Reset to default (fit entire image)">{zoomPct}</button>
       <button type="button" onClick={() => zoomButton(1.25)} disabled={!loaded} className="h-9 w-8 sm:w-9 text-lg text-ink hover:bg-paper2 disabled:opacity-40" title="Zoom in" aria-label="Zoom in">+</button>
     </div>
   );
