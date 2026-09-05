@@ -70,14 +70,6 @@ export interface Round {
   // Runtime-only fields (still safe to persist):
   submissions: Submission[];
   revealIndex: number; // which submission is currently shown at reveal
-  /**
-   * Epoch ms when the one-shot edit→reveal 3-2-1 sting began (set in
-   * {@link toReveal}). Clients derive the beat from this (+ clock skew).
-   * Only plays once per round — not between queue advances.
-   */
-  revealStingStartedAt: number;
-  /** Host skipped the reveal sting early; all clients dismiss immediately. */
-  revealStingSkipped: boolean;
   votingEnabled: boolean;
   votes: Record<string, string>; // voterPlayerId -> submissionId
   /**
@@ -228,7 +220,6 @@ export type ClientMessage =
   /** Withdraw Ready during an active round so the player can keep editing. */
   | { type: 'unsubmit'; roundId: string }
   | { type: 'advanceReveal'; direction?: 1 | -1 } // host only
-  | { type: 'skipRevealSting' } // host only; skip the one-shot 3-2-1 before reveal walkthrough
   | { type: 'beginVoting' } // host only; reveal -> ballot when voting is enabled
   | { type: 'forceReveal' } // host only; skip waiting (e.g. AFK during untimed)
   | { type: 'castVote'; submissionId: string | null } // null clears your vote
@@ -299,9 +290,6 @@ export const NORMAL_TIMER_MAX = TIMER_LONG_SECONDS;
 
 /** Synced pre-round countdown length (3 → 2 → 1 → GO, one second each). */
 export const COUNTDOWN_SECONDS = 4;
-
-/** Synced edit→reveal sting length (3 → 2 → 1 → reveal, one second each). */
-export const REVEAL_STING_SECONDS = 4;
 
 /** Clamp a host-chosen custom duration into sane bounds. */
 export function clampCustomTimerSeconds(seconds: number): number {

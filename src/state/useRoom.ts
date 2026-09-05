@@ -79,7 +79,6 @@ export interface RoomApi {
   submit: (roundId: string, editedImageUrl: string, editCount: number) => void;
   unsubmit: (roundId: string) => void;
   advanceReveal: (direction?: 1 | -1) => void;
-  skipRevealSting: () => void;
   beginVoting: () => void;
   forceReveal: () => void;
   castVote: (submissionId: string | null) => void;
@@ -248,7 +247,6 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
   );
   const unsubmit = useCallback((roundId: string) => send({ type: 'unsubmit', roundId }), [send]);
   const advanceReveal = useCallback((direction: 1 | -1 = 1) => send({ type: 'advanceReveal', direction }), [send]);
-  const skipRevealSting = useCallback(() => send({ type: 'skipRevealSting' }), [send]);
   const beginVoting = useCallback(() => send({ type: 'beginVoting' }), [send]);
   const forceReveal = useCallback(() => send({ type: 'forceReveal' }), [send]);
   const castVote = useCallback((submissionId: string | null) => send({ type: 'castVote', submissionId }), [send]);
@@ -286,7 +284,6 @@ export function useRoom(makeTransport: () => Transport = () => new WebSocketTran
     submit,
     unsubmit,
     advanceReveal,
-    skipRevealSting,
     beginVoting,
     forceReveal,
     castVote,

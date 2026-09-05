@@ -100,7 +100,7 @@ function PhaseView({ room, clockOffsetMs }: { room: ReturnType<typeof useRoom>; 
       // server flips phase to `round` and the deadline bar starts ticking.
       return <RoundView room={room} clockOffsetMs={clockOffsetMs} />;
     case 'reveal':
-      return <Reveal room={room} clockOffsetMs={clockOffsetMs} />;
+      return <Reveal room={room} />;
     case 'voting':
       return <Voting room={room} />;
     case 'scoreboard':
